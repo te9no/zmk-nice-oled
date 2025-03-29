@@ -132,10 +132,10 @@ static struct layer_status_state layer_status_get_state(const zmk_event_t *eh) {
     return (struct layer_status_state){.index = index, .label = zmk_keymap_layer_name(index)};
 }
 
-ZMK_DISPLAY_WIDGET_LISTENER(widget_layer_status, struct layer_status_state, layer_status_update_cb,
+ZMK_DISPLAY_WIDGET_LISTENER(widget_layer_stats, struct layer_status_state, layer_status_update_cb,
                             layer_status_get_state)
 
-ZMK_SUBSCRIPTION(widget_layer_status, zmk_layer_state_changed);
+ZMK_SUBSCRIPTION(widget_layer_stats, zmk_layer_state_changed);
 
 /**
  * Output status
