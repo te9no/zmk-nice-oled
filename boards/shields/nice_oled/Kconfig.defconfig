@@ -10,6 +10,13 @@ config LV_Z_VDB_SIZE
     default 64 if SHIELD_NICE_OLED
     # default 100 if !SHIELD_NICE_OLED
 
+if ZMK_DISPLAY
+
+config ZMK_WIDGET_BATTERY_STATUS
+    default y
+
+endif # ZMK_DISPLAY
+
 config LV_DPI_DEF
     default 148 if SHIELD_NICE_OLED
     # default 161 if !SHIELD_NICE_OLED
