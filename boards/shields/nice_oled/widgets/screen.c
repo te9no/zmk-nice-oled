@@ -25,8 +25,6 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include "screen.h"
 #include "wpm.h"
 
-#include "battery_status.h"
-
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 
 /**
@@ -113,9 +111,6 @@ ZMK_SUBSCRIPTION(widget_battery_status, zmk_battery_state_changed);
 ZMK_SUBSCRIPTION(widget_battery_status, zmk_usb_conn_state_changed);
 #endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK) */
 
-static struct zmk_widget_battery_status battery_status_widget;
-
-
 /**
  * Layer status
  **/
@@ -137,10 +132,10 @@ static struct layer_status_state layer_status_get_state(const zmk_event_t *eh) {
     return (struct layer_status_state){.index = index, .label = zmk_keymap_layer_name(index)};
 }
 
-ZMK_DISPLAY_WIDGET_LISTENER(widget_layer_stats, struct layer_status_state, layer_status_update_cb,
+ZMK_DISPLAY_WIDGET_LISTENER(widget_layer_status, struct layer_status_state, layer_status_update_cb,
                             layer_status_get_state)
 
-ZMK_SUBSCRIPTION(widget_layer_stats, zmk_layer_state_changed);
+ZMK_SUBSCRIPTION(widget_layer_status, zmk_layer_state_changed);
 
 /**
  * Output status
@@ -221,12 +216,9 @@ int zmk_widget_screen_init(struct zmk_widget_screen *widget, lv_obj_t *parent) {
 
     sys_slist_append(&widgets, &widget->node);
     widget_battery_status_init();
-    widget_layer_stats_init();
+    widget_layer_status_init();
     widget_output_status_init();
     widget_wpm_status_init();
-
-    zmk_widget_battery_status_init(&battery_status_widget, screen);
-    lv_obj_align(zmk_widget_battery_status_obj(&battery_status_widget), LV_ALIGN_TOP_RIGHT, 0, 0);
 
 #if IS_ENABLED(CONFIG_NICE_OLED_WIDGET_WPM)
     zmk_widget_luna_init(&luna_widget, canvas);

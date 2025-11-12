@@ -8,6 +8,8 @@ https://github.com/mctechnology17/zmk-nice-oled/blob/main/CHANGELOG.txt
 - [x] CHANGELOG.txt updated
 - [x] README.md updated
 - [x] delete duplicate (in progress)
+- [x] Peripheral battery readouts for central/dongle configurations
+- [x] Removed WPM gauge and key frequency graph from the status screen
 
 # FEATURES 0.0.1-beta1 (Mar 24, 2025)
 =======================================
