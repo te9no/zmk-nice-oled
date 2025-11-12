@@ -23,7 +23,8 @@ struct status_state {
     uint8_t layer_index;
     const char *layer_label;
     uint8_t wpm[10];
-#if IS_ENABLED(CONFIG_ZMK_SPLIT) && IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#if defined(CONFIG_ZMK_SPLIT) && defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                \
+    defined(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
     uint8_t peripheral_battery_level[ZMK_SPLIT_BLE_PERIPHERAL_COUNT];
     bool peripheral_battery_present[ZMK_SPLIT_BLE_PERIPHERAL_COUNT];
 #endif

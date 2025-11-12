@@ -1,6 +1,7 @@
 #pragma once
 
 #include <lvgl.h>
+#include <zmk/ble.h>
 #include <zmk/endpoints.h>
 
 #define CANVAS_WIDTH 68
@@ -25,6 +26,11 @@ struct status_state {
   const char *layer_label;
   uint8_t wpm[10];
   uint8_t mod_state;
+#if defined(CONFIG_ZMK_SPLIT) && defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                \
+    defined(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
+  uint8_t peripheral_battery_level[ZMK_SPLIT_BLE_PERIPHERAL_COUNT];
+  bool peripheral_battery_present[ZMK_SPLIT_BLE_PERIPHERAL_COUNT];
+#endif
 #else
   bool connected;
 #endif

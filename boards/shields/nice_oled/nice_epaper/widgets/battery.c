@@ -76,7 +76,8 @@ static void draw_charging_level(lv_obj_t *canvas, const struct status_state *sta
     lv_canvas_draw_img(canvas, 62, 21, &bolt, &img_dsc);
 }
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT) && IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#if defined(CONFIG_ZMK_SPLIT) && defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                \
+    defined(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
 static void draw_peripheral_levels(lv_obj_t *canvas, const struct status_state *state) {
     lv_draw_label_dsc_t label_dsc;
     init_label_dsc(&label_dsc, LVGL_FOREGROUND, &pixel_operator_mono, LV_TEXT_ALIGN_LEFT);
@@ -107,7 +108,8 @@ void draw_battery_status(lv_obj_t *canvas, const struct status_state *state) {
         draw_level(canvas, state);
     }
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT) && IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#if defined(CONFIG_ZMK_SPLIT) && defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                \
+    defined(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
     draw_peripheral_levels(canvas, state);
 #endif
 }

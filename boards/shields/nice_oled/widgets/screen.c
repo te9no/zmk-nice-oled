@@ -14,6 +14,10 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <zmk/events/layer_state_changed.h>
 #include <zmk/events/usb_conn_state_changed.h>
 #include <zmk/events/wpm_state_changed.h>
+#if defined(CONFIG_ZMK_SPLIT) && defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                \
+    defined(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
+#include <zmk/split/central.h>
+#endif
 #include <zmk/keymap.h>
 #include <zmk/usb.h>
 #include <zmk/wpm.h>
@@ -110,6 +114,82 @@ ZMK_SUBSCRIPTION(widget_battery_status, zmk_battery_state_changed);
 #if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
 ZMK_SUBSCRIPTION(widget_battery_status, zmk_usb_conn_state_changed);
 #endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK) */
+
+#if defined(CONFIG_ZMK_SPLIT) && defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                \
+    defined(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
+struct peripheral_battery_status_state {
+    uint8_t source;
+    uint8_t level;
+    bool valid;
+};
+
+static void set_peripheral_battery_status(struct zmk_widget_screen *widget,
+                                          struct peripheral_battery_status_state state) {
+    if (!state.valid || state.source >= ZMK_SPLIT_BLE_PERIPHERAL_COUNT) {
+        return;
+    }
+
+    widget->state.peripheral_battery_level[state.source] = state.level;
+    widget->state.peripheral_battery_present[state.source] = true;
+
+    draw_canvas(widget->obj, widget->cbuf, &widget->state);
+}
+
+static void peripheral_battery_status_update_cb(struct peripheral_battery_status_state state) {
+    struct zmk_widget_screen *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        set_peripheral_battery_status(widget, state);
+    }
+}
+
+static struct peripheral_battery_status_state
+peripheral_battery_status_get_state(const zmk_event_t *eh) {
+    const struct zmk_peripheral_battery_state_changed *ev = as_zmk_peripheral_battery_state_changed(eh);
+
+    if (ev != NULL) {
+        return (struct peripheral_battery_status_state){
+            .source = ev->source,
+            .level = ev->state_of_charge,
+            .valid = true,
+        };
+    }
+
+    for (uint8_t i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT; i++) {
+        uint8_t level;
+        if (zmk_split_central_get_peripheral_battery_level(i, &level) == 0) {
+            return (struct peripheral_battery_status_state){
+                .source = i,
+                .level = level,
+                .valid = true,
+            };
+        }
+    }
+
+    return (struct peripheral_battery_status_state){.valid = false};
+}
+
+static void refresh_peripheral_battery_cache(void) {
+    for (uint8_t i = 0; i < ZMK_SPLIT_BLE_PERIPHERAL_COUNT; i++) {
+        uint8_t level;
+        if (zmk_split_central_get_peripheral_battery_level(i, &level) != 0) {
+            continue;
+        }
+
+        peripheral_battery_status_update_cb((struct peripheral_battery_status_state){
+            .source = i,
+            .level = level,
+            .valid = true,
+        });
+    }
+}
+
+ZMK_DISPLAY_WIDGET_LISTENER(widget_peripheral_battery_status,
+                            struct peripheral_battery_status_state,
+                            peripheral_battery_status_update_cb,
+                            peripheral_battery_status_get_state);
+
+ZMK_SUBSCRIPTION(widget_peripheral_battery_status, zmk_peripheral_battery_state_changed);
+#endif /* CONFIG_ZMK_SPLIT && CONFIG_ZMK_SPLIT_ROLE_CENTRAL && CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING */
 
 /**
  * Layer status
@@ -216,6 +296,11 @@ int zmk_widget_screen_init(struct zmk_widget_screen *widget, lv_obj_t *parent) {
 
     sys_slist_append(&widgets, &widget->node);
     widget_battery_status_init();
+#if defined(CONFIG_ZMK_SPLIT) && defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                \
+    defined(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
+    widget_peripheral_battery_status_init();
+    refresh_peripheral_battery_cache();
+#endif
     widget_layer_status_init();
     widget_output_status_init();
     widget_wpm_status_init();
