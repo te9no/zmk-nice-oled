@@ -5,6 +5,7 @@ if(CONFIG_ZMK_DISPLAY AND CONFIG_NICE_VIEW_WIDGET_STATUS)
   zephyr_library_sources(widgets/battery.c)
   zephyr_library_sources(widgets/output.c)
   zephyr_library_sources(widgets/util.c)
+  zephyr_library_sources(../widgets/lvgl9_compat.c)
 
   # TODO: charging animation
   # zephyr_library_sources(assets/images_blackout.c)

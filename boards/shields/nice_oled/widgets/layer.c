@@ -3,6 +3,9 @@
 #include <ctype.h> // Para toupper()
 #include <zephyr/kernel.h>
 
+#include "util.h"
+#include "lvgl9_compat.h"
+
 // MC: better implementation
 void draw_layer_status(lv_obj_t *canvas, const struct status_state *state) {
   lv_draw_label_dsc_t label_dsc;

@@ -1,4 +1,7 @@
 #include <zephyr/kernel.h>
+
+#include "util.h"
+#include "lvgl9_compat.h"
 #include "layer.h"
 #include "../assets/custom_fonts.h"
 

@@ -1,5 +1,6 @@
 #include <zephyr/kernel.h>
 #include "util.h"
+#include "lvgl9_compat.h"
 #include <ctype.h>
 
 void to_uppercase(char *str) {
@@ -12,15 +13,14 @@ void rotate_canvas(lv_obj_t *canvas, lv_color_t cbuf[]) {
     static lv_color_t cbuf_tmp[CANVAS_HEIGHT * CANVAS_HEIGHT];
     memcpy(cbuf_tmp, cbuf, sizeof(cbuf_tmp));
 
-    lv_img_dsc_t img;
-    img.data = (void *)cbuf_tmp;
-    img.header.cf = LV_IMG_CF_TRUE_COLOR;
-    img.header.w = CANVAS_HEIGHT;
-    img.header.h = CANVAS_HEIGHT;
+    lv_draw_buf_t *draw_buf = lv_canvas_get_draw_buf(canvas);
+    if (!draw_buf) {
+        return;
+    }
 
-    lv_canvas_fill_bg(canvas, LVGL_BACKGROUND, LV_OPA_COVER);
-    lv_canvas_transform(canvas, &img, 900, LV_IMG_ZOOM_NONE, -1, 0, CANVAS_HEIGHT / 2,
-                        CANVAS_HEIGHT / 2, false);
+    const uint32_t stride = lv_draw_buf_width_to_stride(CANVAS_HEIGHT, LV_COLOR_FORMAT_NATIVE);
+    lv_draw_sw_rotate(cbuf_tmp, draw_buf->data, CANVAS_HEIGHT, CANVAS_HEIGHT, stride, stride,
+                      LV_DISPLAY_ROTATION_270, LV_COLOR_FORMAT_NATIVE);
 }
 
 void draw_background(lv_obj_t *canvas) {

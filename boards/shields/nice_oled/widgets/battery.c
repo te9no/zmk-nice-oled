@@ -2,6 +2,9 @@
 #include "../assets/custom_fonts.h"
 #include <zephyr/kernel.h>
 
+#include "util.h"
+#include "lvgl9_compat.h"
+
 LV_IMG_DECLARE(bolt);
 
 #if IS_ENABLED(CONFIG_NICE_OLED_GEM_ANIMATION_SMART_BATTERY)
@@ -58,8 +61,8 @@ static void animation_smart_battery_off(lv_obj_t *canvas) {
         art = NULL;
     }
     /*
-    lv_draw_img_dsc_t img_dsc;
-    lv_draw_img_dsc_init(&img_dsc);
+    lv_draw_image_dsc_t img_dsc;
+    lv_draw_image_dsc_init(&img_dsc);
     lv_canvas_draw_img(canvas, 18, -18, SET_ANIMATION_SMART_BATTERY_OFF, &img_dsc);
     */
 
@@ -84,8 +87,8 @@ static void draw_level(lv_obj_t *canvas, const struct status_state *state) {
 }
 
 static void draw_charging_level(lv_obj_t *canvas, const struct status_state *state) {
-    lv_draw_img_dsc_t img_dsc;
-    lv_draw_img_dsc_init(&img_dsc);
+    lv_draw_image_dsc_t img_dsc;
+    lv_draw_image_dsc_init(&img_dsc);
     lv_draw_label_dsc_t label_right_dsc;
     init_label_dsc(&label_right_dsc, LVGL_FOREGROUND, &pixel_operator_mono, LV_TEXT_ALIGN_LEFT);
     // LV_TEXT_ALIGN_RIGHT);

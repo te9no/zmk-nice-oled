@@ -1,6 +1,9 @@
 #include <zephyr/kernel.h>
 
+#include "util.h"
+
 #include <zephyr/logging/log.h>
+#include "lvgl9_compat.h"
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #include <zmk/battery.h>

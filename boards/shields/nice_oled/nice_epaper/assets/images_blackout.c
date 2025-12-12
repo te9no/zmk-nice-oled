@@ -42,8 +42,8 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_GRID_BLAC
 
 const lv_img_dsc_t grid_black = {
     .header.cf = LV_IMG_CF_INDEXED_1BIT,
-    .header.always_zero = 0,
-    .header.reserved = 0,
+    .header.flags = 0,
+    .header.magic = LV_IMAGE_HEADER_MAGIC,
     .header.w = 67,
     .header.h = 33,
     .data_size = 305,
@@ -109,8 +109,8 @@ const LV_ATTRIBUTE_MEM_ALIGN LV_ATTRIBUTE_LARGE_CONST LV_ATTRIBUTE_IMG_CRYSTAL_B
 
 const lv_img_dsc_t crystal_black = {
     .header.cf = LV_IMG_CF_INDEXED_1BIT,
-    .header.always_zero = 0,
-    .header.reserved = 0,
+    .header.flags = 0,
+    .header.magic = LV_IMAGE_HEADER_MAGIC,
     .header.w = 69,
     .header.h = 68,
     .data_size = 620,

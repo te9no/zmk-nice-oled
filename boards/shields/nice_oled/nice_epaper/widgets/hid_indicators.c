@@ -79,7 +79,7 @@ static void set_hid_indicators(lv_obj_t *label,
   // Construir el texto según los indicadores activos.
   // Se agregan las letras correspondientes si cada indicador está activo.
 
-#ifdef CONFIG_NICE_OLED_WIDGET_HID_INDICATORS_LUNA_ONLY_CAPSLOCK
+#if IS_ENABLED(CONFIG_NICE_OLED_WIDGET_HID_INDICATORS_LUNA_ONLY_CAPSLOCK)
   if (state.hid_indicators & LED_CLCK) {
 #else
   if (state.hid_indicators & (LED_CLCK | LED_NLCK | LED_SLCK)) {
