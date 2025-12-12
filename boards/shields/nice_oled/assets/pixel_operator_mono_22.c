@@ -5,7 +5,7 @@
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE
-#include "lvgl.h"
+#include "lvgl_compat.h"
 #else
 #include "lvgl/lvgl.h"
 #endif

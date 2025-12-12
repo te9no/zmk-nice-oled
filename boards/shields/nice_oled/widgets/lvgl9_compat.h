@@ -1,6 +1,6 @@
 #pragma once
 
-#include <lvgl.h>
+#include "lvgl_compat.h"
 
 #if LVGL_VERSION_MAJOR >= 9
 void lv_canvas_draw_rect(lv_obj_t *canvas, lv_coord_t x, lv_coord_t y, lv_coord_t w,

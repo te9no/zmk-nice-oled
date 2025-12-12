@@ -3,7 +3,7 @@
 #define SCREEN_H_
 
 #include "util.h"
-#include <lvgl.h>
+#include "lvgl_compat.h"
 #include <zephyr/kernel.h>
 
 struct zmk_widget_screen {

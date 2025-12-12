@@ -1,5 +1,6 @@
 if(CONFIG_ZMK_DISPLAY AND CONFIG_NICE_VIEW_WIDGET_STATUS)
   zephyr_library_include_directories(${CMAKE_SOURCE_DIR}/include)
+  zephyr_library_include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
   zephyr_library_sources(custom_status_screen.c)
   zephyr_library_sources(assets/images.c)
   zephyr_library_sources(widgets/battery.c)

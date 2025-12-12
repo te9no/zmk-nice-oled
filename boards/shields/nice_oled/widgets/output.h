@@ -1,7 +1,7 @@
 #pragma once
 
 #include "util.h"
-#include <lvgl.h>
+#include "lvgl_compat.h"
 #include <zmk/endpoints.h>
 
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT) || IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)

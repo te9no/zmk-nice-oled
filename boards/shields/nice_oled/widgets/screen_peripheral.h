@@ -1,6 +1,6 @@
 #pragma once
 
-#include <lvgl.h>
+#include "lvgl_compat.h"
 #include <zephyr/kernel.h>
 #include "util.h"
 

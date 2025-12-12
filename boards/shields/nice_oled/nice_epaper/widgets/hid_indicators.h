@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <lvgl.h>
+#include "lvgl_compat.h"
 #include <zephyr/kernel.h>
 
 struct zmk_widget_hid_indicators {
