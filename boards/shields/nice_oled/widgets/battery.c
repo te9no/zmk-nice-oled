@@ -5,6 +5,12 @@
 
 LV_IMG_DECLARE(bolt);
 
+#if defined(CONFIG_ZMK_SPLIT) && !defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#define NICE_OLED_SPLIT_PERIPHERAL 1
+#else
+#define NICE_OLED_SPLIT_PERIPHERAL 0
+#endif
+
 #if IS_ENABLED(CONFIG_NICE_OLED_GEM_ANIMATION_SMART_BATTERY)
 // Work at how it is expected, but after disconnecting the keyboard 3 times it is fried
 // CONFIG_NICE_OLED_GEM_ANIMATION
@@ -77,7 +83,11 @@ static void draw_level(lv_obj_t *canvas, const struct status_state *state) {
 
     char text[10] = {};
 
-    sprintf(text, "%i%%", state->battery);
+#if NICE_OLED_SPLIT_PERIPHERAL
+        snprintf(text, sizeof(text), "P%u", state->battery);
+#else
+        snprintf(text, sizeof(text), "%u%%", state->battery);
+#endif
     // sprintf(text, "%i%%", state->battery);
     // x, y, width, dsc, text
     lv_canvas_draw_text(canvas, 0, 50, 42, &label_right_dsc, text);
@@ -93,12 +103,15 @@ static void draw_charging_level(lv_obj_t *canvas, const struct status_state *sta
 
     char text[10] = {};
 
-    sprintf(text, "%i", state->battery);
-    // sprintf(text, "%i%%", state->battery);
-    lv_canvas_draw_text(canvas, 0, 50, 35, &label_right_dsc, text);
-    // lv_canvas_draw_text(canvas, 1, 50, 35, &label_right_dsc, text);
-    lv_canvas_draw_img(canvas, 25, 50, &bolt, &img_dsc);
-    // lv_canvas_draw_img(canvas, 0, 50, &bolt, &img_dsc);
+#if NICE_OLED_SPLIT_PERIPHERAL
+        snprintf(text, sizeof(text), "P%u", state->battery);
+        lv_canvas_draw_text(canvas, 0, 50, 42, &label_right_dsc, text);
+        lv_canvas_draw_img(canvas, 43, 50, &bolt, &img_dsc);
+#else
+        snprintf(text, sizeof(text), "%u", state->battery);
+        lv_canvas_draw_text(canvas, 0, 50, 35, &label_right_dsc, text);
+        lv_canvas_draw_img(canvas, 25, 50, &bolt, &img_dsc);
+#endif
 }
 
 #if defined(CONFIG_ZMK_SPLIT) && defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                   \
@@ -120,6 +133,19 @@ static void draw_peripheral_levels(lv_obj_t *canvas, const struct status_state *
     }
 }
 #endif
+
+static void draw_central_level(lv_obj_t *canvas, const struct status_state *state) {
+    lv_draw_label_dsc_t label_dsc;
+    init_label_dsc(&label_dsc, LVGL_FOREGROUND, &pixel_operator_mono, LV_TEXT_ALIGN_LEFT);
+
+    char text[14];
+    if (state->central_battery_present) {
+        snprintf(text, sizeof(text), "C%u", state->central_battery);
+    } else {
+        snprintf(text, sizeof(text), "C--");
+    }
+    lv_canvas_draw_text(canvas, 0, 64, 42, &label_dsc, text);
+}
 
 void draw_battery_status(lv_obj_t *canvas, const struct status_state *state) {
     /*
@@ -145,5 +171,8 @@ void draw_battery_status(lv_obj_t *canvas, const struct status_state *state) {
 #if defined(CONFIG_ZMK_SPLIT) && defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                   \
     defined(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
     draw_peripheral_levels(canvas, state);
+#endif
+#if NICE_OLED_SPLIT_PERIPHERAL
+    draw_central_level(canvas, state);
 #endif
 }

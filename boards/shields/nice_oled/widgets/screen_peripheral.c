@@ -19,6 +19,8 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include "screen_peripheral.h"
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
+static struct battery_status_state last_battery_status;
+static bool last_battery_status_valid;
 
 /**
  * Draw canvas
@@ -43,6 +45,11 @@ static void draw_canvas(lv_obj_t *widget, lv_color_t cbuf[], const struct status
 static void set_battery_status(struct zmk_widget_screen *widget,
                                struct battery_status_state state) {
 
+    if (state.valid) {
+        last_battery_status = state;
+        last_battery_status_valid = true;
+    }
+
 #if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
     widget->state.charging = state.usb_present;
 #endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK) */
@@ -58,10 +65,13 @@ static void battery_status_update_cb(struct battery_status_state state) {
 }
 
 static struct battery_status_state battery_status_get_state(const zmk_event_t *eh) {
-    const struct zmk_battery_state_changed *ev = as_zmk_battery_state_changed(eh);
+    const struct zmk_battery_state_changed *ev =
+        (eh != NULL) ? as_zmk_battery_state_changed(eh) : NULL;
+    uint8_t level = (ev != NULL) ? ev->state_of_charge : zmk_battery_state_of_charge();
 
     return (struct battery_status_state){
-        .level = (ev != NULL) ? ev->state_of_charge : zmk_battery_state_of_charge(),
+        .level = level,
+        .valid = (ev != NULL) || (level > 0),
 #if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
         .usb_present = zmk_usb_is_powered(),
 #endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK) */
@@ -75,6 +85,69 @@ ZMK_SUBSCRIPTION(widget_battery_status, zmk_battery_state_changed);
 #if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
 ZMK_SUBSCRIPTION(widget_battery_status, zmk_usb_conn_state_changed);
 #endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK) */
+
+/**
+ * Central battery status
+ **/
+
+struct central_battery_status_state {
+    uint8_t level;
+    bool valid;
+};
+
+static void apply_last_battery_status(struct zmk_widget_screen *widget) {
+    if (!last_battery_status_valid) {
+        return;
+    }
+
+#if IS_ENABLED(CONFIG_USB_DEVICE_STACK)
+    widget->state.charging = last_battery_status.usb_present;
+#endif /* IS_ENABLED(CONFIG_USB_DEVICE_STACK) */
+
+    widget->state.battery = last_battery_status.level;
+}
+
+static void set_central_battery_status(struct zmk_widget_screen *widget,
+                                       struct central_battery_status_state state) {
+    apply_last_battery_status(widget);
+
+    if (!state.valid) {
+        widget->state.central_battery_present = false;
+        draw_canvas(widget->obj, widget->cbuf, &widget->state);
+        return;
+    }
+
+    widget->state.central_battery = state.level;
+    widget->state.central_battery_present = true;
+
+    draw_canvas(widget->obj, widget->cbuf, &widget->state);
+}
+
+static void central_battery_status_update_cb(struct central_battery_status_state state) {
+    struct zmk_widget_screen *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        set_central_battery_status(widget, state);
+    }
+}
+
+static struct central_battery_status_state central_battery_status_get_state(const zmk_event_t *eh) {
+    if (eh == NULL) {
+        return (struct central_battery_status_state){.valid = false};
+    }
+
+    const struct zmk_central_battery_state_changed *ev =
+        as_zmk_central_battery_state_changed(eh);
+
+    return (struct central_battery_status_state){
+        .level = (ev != NULL) ? ev->state_of_charge : 0,
+        .valid = (ev != NULL),
+    };
+}
+
+ZMK_DISPLAY_WIDGET_LISTENER(widget_central_battery_status, struct central_battery_status_state,
+                            central_battery_status_update_cb, central_battery_status_get_state);
+
+ZMK_SUBSCRIPTION(widget_central_battery_status, zmk_central_battery_state_changed);
 
 /**
  * Peripheral status
@@ -115,6 +188,7 @@ int zmk_widget_screen_init(struct zmk_widget_screen *widget, lv_obj_t *parent) {
     sys_slist_append(&widgets, &widget->node);
     draw_animation(canvas, widget);
     widget_battery_status_init();
+    widget_central_battery_status_init();
     widget_peripheral_status_init();
 
     return 0;
