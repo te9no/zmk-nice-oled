@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 
 #include <zephyr/devicetree.h>
 #include <zephyr/kernel.h>
@@ -16,6 +17,8 @@
 #include <zmk/display.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/battery_state_changed.h>
+#include <zmk/events/layer_state_changed.h>
+#include <zmk/keymap.h>
 #include <zmk/split/central.h>
 
 #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
@@ -28,6 +31,7 @@
 #define BATTERY_SOURCE_PERIPHERAL 1
 #define BATTERY_SOURCE_COUNT 2
 #define BATTERY_SOURCE_IGNORE 0xff
+#define LAYER_LABEL_MAX_LEN 8
 
 BUILD_ASSERT(PHYSICAL_WIDTH == 128 && PHYSICAL_HEIGHT == 32,
              "The portrait battery screen currently supports 128x32 displays");
@@ -41,12 +45,18 @@ struct battery_widget {
     sys_snode_t node;
     lv_obj_t *canvas;
     struct battery_state batteries[BATTERY_SOURCE_COUNT];
+    char layer_label[LAYER_LABEL_MAX_LEN + 1];
 };
 
 struct battery_update {
     uint8_t source;
     uint8_t level;
     bool valid;
+};
+
+struct layer_update {
+    zmk_keymap_layer_index_t index;
+    const char *label;
 };
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
@@ -59,6 +69,23 @@ static const uint8_t digit_rows[10][5] = {
     {0x5, 0x5, 0x7, 0x1, 0x1}, {0x7, 0x4, 0x7, 0x1, 0x7},
     {0x7, 0x4, 0x7, 0x5, 0x7}, {0x7, 0x1, 0x1, 0x1, 0x1},
     {0x7, 0x5, 0x7, 0x5, 0x7}, {0x7, 0x5, 0x7, 0x1, 0x7},
+};
+
+/* Uppercase letters use the same compact 3x5 cell as the battery digits. */
+static const uint8_t letter_rows[26][5] = {
+    {0x2, 0x5, 0x7, 0x5, 0x5}, {0x6, 0x5, 0x6, 0x5, 0x6},
+    {0x7, 0x4, 0x4, 0x4, 0x7}, {0x6, 0x5, 0x5, 0x5, 0x6},
+    {0x7, 0x4, 0x6, 0x4, 0x7}, {0x7, 0x4, 0x6, 0x4, 0x4},
+    {0x7, 0x4, 0x5, 0x5, 0x7}, {0x5, 0x5, 0x7, 0x5, 0x5},
+    {0x7, 0x2, 0x2, 0x2, 0x7}, {0x1, 0x1, 0x1, 0x5, 0x7},
+    {0x5, 0x5, 0x6, 0x5, 0x5}, {0x4, 0x4, 0x4, 0x4, 0x7},
+    {0x5, 0x7, 0x7, 0x5, 0x5}, {0x5, 0x7, 0x7, 0x7, 0x5},
+    {0x7, 0x5, 0x5, 0x5, 0x7}, {0x6, 0x5, 0x6, 0x4, 0x4},
+    {0x7, 0x5, 0x5, 0x7, 0x1}, {0x6, 0x5, 0x6, 0x5, 0x5},
+    {0x7, 0x4, 0x7, 0x1, 0x7}, {0x7, 0x2, 0x2, 0x2, 0x2},
+    {0x5, 0x5, 0x5, 0x5, 0x7}, {0x5, 0x5, 0x5, 0x5, 0x2},
+    {0x5, 0x5, 0x7, 0x7, 0x5}, {0x5, 0x5, 0x2, 0x5, 0x5},
+    {0x5, 0x5, 0x2, 0x2, 0x2}, {0x7, 0x1, 0x2, 0x4, 0x7},
 };
 
 static void set_physical_pixel(lv_obj_t *canvas, int32_t x, int32_t y, bool on) {
@@ -104,6 +131,43 @@ static void draw_digit(lv_obj_t *canvas, uint8_t digit, int32_t x, int32_t y, ui
     }
 }
 
+static void draw_letter(lv_obj_t *canvas, char letter, int32_t x, int32_t y, uint8_t scale) {
+    if (letter >= 'a' && letter <= 'z') {
+        letter -= 'a' - 'A';
+    }
+    if (letter < 'A' || letter > 'Z') {
+        return;
+    }
+
+    const uint8_t *rows = letter_rows[letter - 'A'];
+    for (uint8_t row = 0; row < 5; row++) {
+        for (uint8_t col = 0; col < 3; col++) {
+            if ((rows[row] & BIT(2 - col)) != 0) {
+                fill_portrait_rect(canvas, x + col * scale, y + row * scale, scale, scale, true);
+            }
+        }
+    }
+}
+
+static void draw_text(lv_obj_t *canvas, const char *text, int32_t y) {
+    size_t length = MIN(strlen(text), LAYER_LABEL_MAX_LEN);
+    if (length == 0) {
+        return;
+    }
+
+    const int32_t text_width = length * 3 + (length - 1);
+    int32_t x = (PORTRAIT_WIDTH - text_width) / 2;
+
+    for (size_t i = 0; i < length; i++) {
+        if (text[i] >= '0' && text[i] <= '9') {
+            draw_digit(canvas, text[i] - '0', x, y, 1);
+        } else {
+            draw_letter(canvas, text[i], x, y, 1);
+        }
+        x += 4;
+    }
+}
+
 static void draw_dash(lv_obj_t *canvas, int32_t x, int32_t y) {
     fill_portrait_rect(canvas, x, y + 2, 3, 1, true);
 }
@@ -113,8 +177,8 @@ static void draw_level(lv_obj_t *canvas, uint8_t source, const struct battery_st
     const int32_t column_x = source * column_width;
 
     if (!state->valid) {
-        draw_dash(canvas, column_x + 4, 20);
-        draw_dash(canvas, column_x + 9, 20);
+        draw_dash(canvas, column_x + 4, 23);
+        draw_dash(canvas, column_x + 9, 23);
         return;
     }
 
@@ -127,7 +191,7 @@ static void draw_level(lv_obj_t *canvas, uint8_t source, const struct battery_st
     int32_t x = column_x + (column_width - text_width) / 2;
 
     for (int i = 0; i < length; i++) {
-        draw_digit(canvas, text[i] - '0', x, 20, 1);
+        draw_digit(canvas, text[i] - '0', x, 23, 1);
         x += glyph_width + spacing;
     }
 }
@@ -135,9 +199,9 @@ static void draw_level(lv_obj_t *canvas, uint8_t source, const struct battery_st
 static void draw_battery_outline(lv_obj_t *canvas, uint8_t source,
                                  const struct battery_state *state) {
     const int32_t x = 3 + source * (PORTRAIT_WIDTH / BATTERY_SOURCE_COUNT);
-    const int32_t y = 34;
+    const int32_t y = 36;
     const int32_t width = 10;
-    const int32_t height = 88;
+    const int32_t height = 86;
 
     fill_portrait_rect(canvas, x + 3, y - 4, 4, 4, true);
     fill_portrait_rect(canvas, x, y, width, 2, true);
@@ -158,23 +222,15 @@ static void draw_battery_outline(lv_obj_t *canvas, uint8_t source,
 }
 
 static void draw_source_marker(lv_obj_t *canvas, uint8_t source) {
-    static const uint8_t central_rows[7] = {0xF, 0x8, 0x8, 0x8, 0x8, 0x8, 0xF};
-    static const uint8_t peripheral_rows[7] = {0xE, 0x9, 0x9, 0xE, 0x8, 0x8, 0x8};
-    const uint8_t *rows =
-        source == BATTERY_SOURCE_CENTRAL ? central_rows : peripheral_rows;
-    const int32_t x = 4 + source * (PORTRAIT_WIDTH / BATTERY_SOURCE_COUNT);
-
-    for (uint8_t row = 0; row < 7; row++) {
-        for (uint8_t col = 0; col < 4; col++) {
-            if ((rows[row] & BIT(3 - col)) != 0) {
-                fill_portrait_rect(canvas, x + col * 2, 3 + row * 2, 2, 2, true);
-            }
-        }
-    }
+    const int32_t x = 6 + source * (PORTRAIT_WIDTH / BATTERY_SOURCE_COUNT);
+    draw_letter(canvas, source == BATTERY_SOURCE_CENTRAL ? 'C' : 'P', x, 15, 1);
 }
 
 static void redraw(struct battery_widget *widget) {
     lv_canvas_fill_bg(widget->canvas, lv_color_hex(0), LV_OPA_COVER);
+
+    draw_text(widget->canvas, widget->layer_label, 3);
+    fill_portrait_rect(widget->canvas, 1, 11, PORTRAIT_WIDTH - 2, 1, true);
 
     for (uint8_t source = 0; source < BATTERY_SOURCE_COUNT; source++) {
         draw_source_marker(widget->canvas, source);
@@ -183,6 +239,27 @@ static void redraw(struct battery_widget *widget) {
     }
 
     lv_obj_invalidate(widget->canvas);
+}
+
+static void layer_status_update_cb(struct layer_update update) {
+    struct battery_widget *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        if (update.label != NULL && update.label[0] != '\0') {
+            snprintf(widget->layer_label, sizeof(widget->layer_label), "%.*s",
+                     LAYER_LABEL_MAX_LEN, update.label);
+        } else {
+            snprintf(widget->layer_label, sizeof(widget->layer_label), "L%u", update.index);
+        }
+        redraw(widget);
+    }
+}
+
+static struct layer_update layer_status_get_state(const zmk_event_t *eh) {
+    zmk_keymap_layer_index_t index = zmk_keymap_highest_layer_active();
+    return (struct layer_update){
+        .index = index,
+        .label = zmk_keymap_layer_name(zmk_keymap_layer_index_to_id(index)),
+    };
 }
 
 static void battery_status_update_cb(struct battery_update update) {
@@ -230,6 +307,10 @@ ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_battery, struct battery_update,
 ZMK_SUBSCRIPTION(widget_nice_oled_battery, zmk_battery_state_changed);
 ZMK_SUBSCRIPTION(widget_nice_oled_battery, zmk_peripheral_battery_state_changed);
 
+ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_layer, struct layer_update,
+                            layer_status_update_cb, layer_status_get_state)
+ZMK_SUBSCRIPTION(widget_nice_oled_layer, zmk_layer_state_changed);
+
 lv_obj_t *zmk_display_status_screen(void) {
     static struct battery_widget widget;
     lv_obj_t *screen = lv_obj_create(NULL);
@@ -247,6 +328,7 @@ lv_obj_t *zmk_display_status_screen(void) {
 
     sys_slist_append(&widgets, &widget.node);
     widget_nice_oled_battery_init();
+    widget_nice_oled_layer_init();
 
     uint8_t peripheral_level = 0;
     if (zmk_split_central_get_peripheral_battery_level(
