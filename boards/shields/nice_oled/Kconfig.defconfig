@@ -12,6 +12,36 @@ config NICE_EPAPER_ON
     bool "Enable nice view widget compatibility"
     default n
 
+config NICE_OLED_ZMK_0_4_BATTERY_ONLY
+    bool "Use the ZMK 0.4 portrait peripheral battery screen"
+    depends on SHIELD_NICE_OLED
+    default n
+    select LV_USE_CANVAS
+    help
+      Build a lightweight LVGL 9 compatible screen for a 128x32 OLED
+      mounted vertically. The first split peripheral battery is rendered
+      in a logical 32x128 portrait coordinate system and rotated into the
+      physical framebuffer without LVGL object transforms.
+
+choice NICE_OLED_ZMK_0_4_ROTATION
+    prompt "Portrait OLED rotation"
+    depends on NICE_OLED_ZMK_0_4_BATTERY_ONLY
+    default NICE_OLED_ZMK_0_4_ROTATION_90
+
+config NICE_OLED_ZMK_0_4_ROTATION_90
+    bool "90 degrees clockwise"
+
+config NICE_OLED_ZMK_0_4_ROTATION_270
+    bool "270 degrees clockwise"
+
+endchoice
+
+config NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX
+    int "Split peripheral battery source index"
+    depends on NICE_OLED_ZMK_0_4_BATTERY_ONLY
+    range 0 7
+    default 0
+
 config NICE_OLED_CUSTOM_CANVAS_WIDTH
     int "Custom Canvas Width"
     default 68
@@ -66,11 +96,11 @@ config ZMK_DISPLAY_DEDICATED_THREAD_PRIORITY
     default 5
 
 config ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
-    imply NICE_OLED_WIDGET_STATUS
+    imply NICE_OLED_WIDGET_STATUS if !NICE_OLED_ZMK_0_4_BATTERY_ONLY
 
 config NICE_OLED_WIDGET_STATUS
     bool "Custom nice oled status widget"
-    default y
+    default y if !NICE_OLED_ZMK_0_4_BATTERY_ONLY
     select LV_USE_LABEL
     select LV_USE_IMG
     select LV_USE_CANVAS
