@@ -12,6 +12,7 @@
 
 #include <lvgl.h>
 
+#include <zmk/battery.h>
 #include <zmk/display.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/battery_state_changed.h>
@@ -23,15 +24,26 @@
 #define PORTRAIT_WIDTH PHYSICAL_HEIGHT
 #define PORTRAIT_HEIGHT PHYSICAL_WIDTH
 
+#define BATTERY_SOURCE_CENTRAL 0
+#define BATTERY_SOURCE_PERIPHERAL 1
+#define BATTERY_SOURCE_COUNT 2
+#define BATTERY_SOURCE_IGNORE 0xff
+
 BUILD_ASSERT(PHYSICAL_WIDTH == 128 && PHYSICAL_HEIGHT == 32,
              "The portrait battery screen currently supports 128x32 displays");
+
+struct battery_state {
+    uint8_t level;
+    bool valid;
+};
 
 struct battery_widget {
     sys_snode_t node;
     lv_obj_t *canvas;
+    struct battery_state batteries[BATTERY_SOURCE_COUNT];
 };
 
-struct peripheral_battery_state {
+struct battery_update {
     uint8_t source;
     uint8_t level;
     bool valid;
@@ -92,38 +104,42 @@ static void draw_digit(lv_obj_t *canvas, uint8_t digit, int32_t x, int32_t y, ui
     }
 }
 
-static void draw_dash(lv_obj_t *canvas, int32_t x, int32_t y, uint8_t scale) {
-    fill_portrait_rect(canvas, x, y + 2 * scale, 3 * scale, scale, true);
+static void draw_dash(lv_obj_t *canvas, int32_t x, int32_t y) {
+    fill_portrait_rect(canvas, x, y + 2, 3, 1, true);
 }
 
-static void draw_level(lv_obj_t *canvas, const struct peripheral_battery_state *state) {
+static void draw_level(lv_obj_t *canvas, uint8_t source, const struct battery_state *state) {
+    const int32_t column_width = PORTRAIT_WIDTH / BATTERY_SOURCE_COUNT;
+    const int32_t column_x = source * column_width;
+
     if (!state->valid) {
-        draw_dash(canvas, 8, 27, 2);
-        draw_dash(canvas, 18, 27, 2);
+        draw_dash(canvas, column_x + 4, 20);
+        draw_dash(canvas, column_x + 9, 20);
         return;
     }
 
     uint8_t level = MIN(state->level, 100);
     char text[4];
     int length = snprintf(text, sizeof(text), "%u", level);
-    const int32_t glyph_width = 6;
-    const int32_t spacing = 2;
+    const int32_t glyph_width = 3;
+    const int32_t spacing = 1;
     const int32_t text_width = length * glyph_width + (length - 1) * spacing;
-    int32_t x = (PORTRAIT_WIDTH - text_width) / 2;
+    int32_t x = column_x + (column_width - text_width) / 2;
 
     for (int i = 0; i < length; i++) {
-        draw_digit(canvas, text[i] - '0', x, 24, 2);
+        draw_digit(canvas, text[i] - '0', x, 20, 1);
         x += glyph_width + spacing;
     }
 }
 
-static void draw_battery_outline(lv_obj_t *canvas, const struct peripheral_battery_state *state) {
-    const int32_t x = 7;
-    const int32_t y = 48;
-    const int32_t width = 18;
-    const int32_t height = 70;
+static void draw_battery_outline(lv_obj_t *canvas, uint8_t source,
+                                 const struct battery_state *state) {
+    const int32_t x = 3 + source * (PORTRAIT_WIDTH / BATTERY_SOURCE_COUNT);
+    const int32_t y = 34;
+    const int32_t width = 10;
+    const int32_t height = 88;
 
-    fill_portrait_rect(canvas, x + 6, y - 4, 6, 4, true);
+    fill_portrait_rect(canvas, x + 3, y - 4, 4, 4, true);
     fill_portrait_rect(canvas, x, y, width, 2, true);
     fill_portrait_rect(canvas, x, y + height - 2, width, 2, true);
     fill_portrait_rect(canvas, x, y, 2, height, true);
@@ -141,61 +157,78 @@ static void draw_battery_outline(lv_obj_t *canvas, const struct peripheral_batte
     }
 }
 
-static void draw_source_marker(lv_obj_t *canvas) {
-    /* A compact R marks the right-side peripheral shown by Polaris' central half. */
-    static const uint8_t rows[7] = {0xE, 0x9, 0x9, 0xE, 0xA, 0x9, 0x9};
+static void draw_source_marker(lv_obj_t *canvas, uint8_t source) {
+    static const uint8_t central_rows[7] = {0xF, 0x8, 0x8, 0x8, 0x8, 0x8, 0xF};
+    static const uint8_t peripheral_rows[7] = {0xE, 0x9, 0x9, 0xE, 0x8, 0x8, 0x8};
+    const uint8_t *rows =
+        source == BATTERY_SOURCE_CENTRAL ? central_rows : peripheral_rows;
+    const int32_t x = 4 + source * (PORTRAIT_WIDTH / BATTERY_SOURCE_COUNT);
+
     for (uint8_t row = 0; row < 7; row++) {
         for (uint8_t col = 0; col < 4; col++) {
             if ((rows[row] & BIT(3 - col)) != 0) {
-                fill_portrait_rect(canvas, 12 + col * 2, 4 + row * 2, 2, 2, true);
+                fill_portrait_rect(canvas, x + col * 2, 3 + row * 2, 2, 2, true);
             }
         }
     }
 }
 
-static void redraw(struct battery_widget *widget, const struct peripheral_battery_state *state) {
+static void redraw(struct battery_widget *widget) {
     lv_canvas_fill_bg(widget->canvas, lv_color_hex(0), LV_OPA_COVER);
-    draw_source_marker(widget->canvas);
-    draw_level(widget->canvas, state);
-    draw_battery_outline(widget->canvas, state);
+
+    for (uint8_t source = 0; source < BATTERY_SOURCE_COUNT; source++) {
+        draw_source_marker(widget->canvas, source);
+        draw_level(widget->canvas, source, &widget->batteries[source]);
+        draw_battery_outline(widget->canvas, source, &widget->batteries[source]);
+    }
+
     lv_obj_invalidate(widget->canvas);
 }
 
-static void battery_status_update_cb(struct peripheral_battery_state state) {
-    if (state.source != CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX) {
+static void battery_status_update_cb(struct battery_update update) {
+    if (update.source >= BATTERY_SOURCE_COUNT) {
         return;
     }
 
     struct battery_widget *widget;
-    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) { redraw(widget, &state); }
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        widget->batteries[update.source] = (struct battery_state){
+            .level = update.level,
+            .valid = update.valid,
+        };
+        redraw(widget);
+    }
 }
 
-static struct peripheral_battery_state battery_status_get_state(const zmk_event_t *eh) {
-    const struct zmk_peripheral_battery_state_changed *event =
+static struct battery_update battery_status_get_state(const zmk_event_t *eh) {
+    const struct zmk_peripheral_battery_state_changed *peripheral_event =
         as_zmk_peripheral_battery_state_changed(eh);
 
-    if (event != NULL) {
-        return (struct peripheral_battery_state){
-            .source = event->source,
-            .level = event->state_of_charge,
+    if (peripheral_event != NULL) {
+        if (peripheral_event->source != CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX) {
+            return (struct battery_update){.source = BATTERY_SOURCE_IGNORE};
+        }
+
+        return (struct battery_update){
+            .source = BATTERY_SOURCE_PERIPHERAL,
+            .level = peripheral_event->state_of_charge,
             .valid = true,
         };
     }
 
-    uint8_t level = 0;
-    int err = zmk_split_central_get_peripheral_battery_level(
-        CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX, &level);
-    return (struct peripheral_battery_state){
-        .source = CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX,
-        .level = level,
-        .valid = err == 0 && level > 0,
+    const struct zmk_battery_state_changed *central_event = as_zmk_battery_state_changed(eh);
+    return (struct battery_update){
+        .source = BATTERY_SOURCE_CENTRAL,
+        .level = central_event != NULL ? central_event->state_of_charge
+                                       : zmk_battery_state_of_charge(),
+        .valid = true,
     };
 }
 
-ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_peripheral_battery,
-                            struct peripheral_battery_state, battery_status_update_cb,
-                            battery_status_get_state)
-ZMK_SUBSCRIPTION(widget_nice_oled_peripheral_battery, zmk_peripheral_battery_state_changed);
+ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_battery, struct battery_update,
+                            battery_status_update_cb, battery_status_get_state)
+ZMK_SUBSCRIPTION(widget_nice_oled_battery, zmk_battery_state_changed);
+ZMK_SUBSCRIPTION(widget_nice_oled_battery, zmk_peripheral_battery_state_changed);
 
 lv_obj_t *zmk_display_status_screen(void) {
     static struct battery_widget widget;
@@ -213,7 +246,17 @@ lv_obj_t *zmk_display_status_screen(void) {
     lv_obj_align(widget.canvas, LV_ALIGN_TOP_LEFT, 0, 0);
 
     sys_slist_append(&widgets, &widget.node);
-    widget_nice_oled_peripheral_battery_init();
+    widget_nice_oled_battery_init();
+
+    uint8_t peripheral_level = 0;
+    if (zmk_split_central_get_peripheral_battery_level(
+            CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX, &peripheral_level) == 0) {
+        widget.batteries[BATTERY_SOURCE_PERIPHERAL] = (struct battery_state){
+            .level = peripheral_level,
+            .valid = true,
+        };
+        redraw(&widget);
+    }
 
     return screen;
 }
