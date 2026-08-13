@@ -173,6 +173,26 @@ CONFIG_ZMK_DISPLAY=y
 CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM=y
 ```
 
+### ZMK 0.4 portrait peripheral battery screen
+
+The `zmk-0.4-polaris` branch includes a lightweight LVGL 9 screen for a
+128x32 SSD1306 mounted vertically. It shows the selected split peripheral's
+battery level and avoids runtime object transforms by rotating pixels into the
+physical framebuffer.
+
+```conf
+CONFIG_ZMK_DISPLAY=y
+CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM=y
+CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING=y
+CONFIG_NICE_OLED_ZMK_0_4_BATTERY_ONLY=y
+CONFIG_NICE_OLED_ZMK_0_4_ROTATION_90=y
+CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX=0
+```
+
+Use `CONFIG_NICE_OLED_ZMK_0_4_ROTATION_270=y` instead if the display is mounted
+in the opposite portrait direction. This mode intentionally disables the
+legacy animation and status widgets to keep the display path small and stable.
+
 Anatomy of the variables of this repository
 
 This document lists the available configuration options for the `nice_oled` shield. These variables can be set in your `.conf` file to customize the behavior of the display widgets.

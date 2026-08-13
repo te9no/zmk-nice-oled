@@ -83,6 +83,7 @@ config ZMK_DISPLAY_BLANK_ON_IDLE
     default y if NICE_CUSTOM_ON
 
 config LV_Z_MEM_POOL_SIZE
+    default 4096 if NICE_OLED_ZMK_0_4_BATTERY_ONLY
     default 8192 if !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL # dongle_display: 8192 prospector: 10000 def: 4096
     default 4096 # dongle_display: 8192 prospector: 10000 def: 4096
 
@@ -97,6 +98,8 @@ config ZMK_DISPLAY_DEDICATED_THREAD_PRIORITY
 
 config ZMK_DISPLAY_STATUS_SCREEN_CUSTOM
     imply NICE_OLED_WIDGET_STATUS if !NICE_OLED_ZMK_0_4_BATTERY_ONLY
+
+if !NICE_OLED_ZMK_0_4_BATTERY_ONLY
 
 config NICE_OLED_WIDGET_STATUS
     bool "Custom nice oled status widget"
@@ -864,5 +867,6 @@ config NICE_OLED_WIDGET_SLEEP_STATUS_CUSTOM_Y
 ##}}}
 
 ### WIDGET POSITION COORDINATES END }}}
+endif # !NICE_OLED_ZMK_0_4_BATTERY_ONLY
 endif # SHIELD_NICE_OLED || SHIELD_NICE_EPAPER || SHIELD_NICE_CUSTOM
 # vim: set fdm=marker:
