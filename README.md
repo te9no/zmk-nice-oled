@@ -176,9 +176,10 @@ CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM=y
 ### ZMK 0.4 portrait split battery screen
 
 The `zmk-0.4-polaris` branch includes a lightweight LVGL 9 screen for a
-128x32 SSD1306 mounted vertically. It shows the active ZMK layer name above the
-central (`C`) and selected split peripheral (`P`) battery levels, and avoids
-runtime object transforms by rotating pixels into the physical framebuffer.
+128x32 SSD1306 mounted vertically. It shows a large active-layer label, a
+low-overhead animated pixel cat, and compact central (`C`) and selected split
+peripheral (`P`) battery gauges. It avoids runtime object transforms by
+rotating pixels directly into the physical framebuffer.
 
 ```conf
 CONFIG_ZMK_DISPLAY=y
@@ -190,8 +191,9 @@ CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX=0
 ```
 
 Use `CONFIG_NICE_OLED_ZMK_0_4_ROTATION_270=y` instead if the display is mounted
-in the opposite portrait direction. This mode intentionally disables the
-legacy animation and status widgets to keep the display path small and stable.
+in the opposite portrait direction. This mode intentionally replaces the
+legacy widget stack with one canvas and a four-frame 600 ms animation to keep
+the display path small and stable.
 
 Anatomy of the variables of this repository
 

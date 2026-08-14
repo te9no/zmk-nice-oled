@@ -31,7 +31,9 @@
 #define BATTERY_SOURCE_PERIPHERAL 1
 #define BATTERY_SOURCE_COUNT 2
 #define BATTERY_SOURCE_IGNORE 0xff
-#define LAYER_LABEL_MAX_LEN 8
+#define LAYER_LABEL_MAX_LEN 4
+#define CAT_FRAME_COUNT 4
+#define CAT_ANIMATION_PERIOD_MS 600
 
 BUILD_ASSERT(PHYSICAL_WIDTH == 128 && PHYSICAL_HEIGHT == 32,
              "The portrait battery screen currently supports 128x32 displays");
@@ -44,8 +46,10 @@ struct battery_state {
 struct battery_widget {
     sys_snode_t node;
     lv_obj_t *canvas;
+    lv_timer_t *cat_timer;
     struct battery_state batteries[BATTERY_SOURCE_COUNT];
     char layer_label[LAYER_LABEL_MAX_LEN + 1];
+    uint8_t cat_frame;
 };
 
 struct battery_update {
@@ -149,96 +153,140 @@ static void draw_letter(lv_obj_t *canvas, char letter, int32_t x, int32_t y, uin
     }
 }
 
-static void draw_text(lv_obj_t *canvas, const char *text, int32_t y) {
-    size_t length = MIN(strlen(text), LAYER_LABEL_MAX_LEN);
+static int32_t text_width(size_t length, uint8_t scale) {
+    return length == 0 ? 0 : length * 3 * scale + (length - 1) * scale;
+}
+
+static void draw_text(lv_obj_t *canvas, const char *text, int32_t y, uint8_t scale,
+                      size_t max_length) {
+    size_t length = MIN(strlen(text), max_length);
     if (length == 0) {
         return;
     }
 
-    const int32_t text_width = length * 3 + (length - 1);
-    int32_t x = (PORTRAIT_WIDTH - text_width) / 2;
+    int32_t x = (PORTRAIT_WIDTH - text_width(length, scale)) / 2;
 
     for (size_t i = 0; i < length; i++) {
         if (text[i] >= '0' && text[i] <= '9') {
-            draw_digit(canvas, text[i] - '0', x, y, 1);
+            draw_digit(canvas, text[i] - '0', x, y, scale);
         } else {
-            draw_letter(canvas, text[i], x, y, 1);
+            draw_letter(canvas, text[i], x, y, scale);
         }
-        x += 4;
+        x += 4 * scale;
     }
 }
 
-static void draw_dash(lv_obj_t *canvas, int32_t x, int32_t y) {
-    fill_portrait_rect(canvas, x, y + 2, 3, 1, true);
+static void draw_dash(lv_obj_t *canvas, int32_t x, int32_t y, uint8_t scale) {
+    fill_portrait_rect(canvas, x, y + 2 * scale, 3 * scale, scale, true);
+}
+
+static void draw_cat(lv_obj_t *canvas, uint8_t frame) {
+    const int32_t x = 4;
+    const int32_t y = 18;
+
+    /* A compact silhouette keeps the animation readable on a 32 px wide display. */
+    fill_portrait_rect(canvas, x + 5, y + 2, 3, 6, true);
+    fill_portrait_rect(canvas, x + 16, y + 2, 3, 6, true);
+    fill_portrait_rect(canvas, x + 4, y + 6, 16, 15, true);
+    fill_portrait_rect(canvas, x + 7, y + 21, 11, 21, true);
+
+    /* Face: the third frame blinks. */
+    if (frame == 2) {
+        fill_portrait_rect(canvas, x + 7, y + 12, 3, 1, false);
+        fill_portrait_rect(canvas, x + 14, y + 12, 3, 1, false);
+    } else {
+        fill_portrait_rect(canvas, x + 8, y + 11, 2, 2, false);
+        fill_portrait_rect(canvas, x + 14, y + 11, 2, 2, false);
+    }
+    set_portrait_pixel(canvas, x + 11, y + 15, false);
+    set_portrait_pixel(canvas, x + 12, y + 15, false);
+    fill_portrait_rect(canvas, x + 10, y + 17, 4, 1, false);
+
+    /* Belly and feet separate the silhouette from a solid rectangle. */
+    fill_portrait_rect(canvas, x + 10, y + 26, 5, 11, false);
+    fill_portrait_rect(canvas, x + 6, y + 40, 6, 4, true);
+    fill_portrait_rect(canvas, x + 14, y + 40, 6, 4, true);
+
+    /* Tail and one paw alternate between frames. */
+    if ((frame & 1) == 0) {
+        fill_portrait_rect(canvas, x + 18, y + 25, 3, 14, true);
+        fill_portrait_rect(canvas, x + 20, y + 22, 5, 3, true);
+    } else {
+        fill_portrait_rect(canvas, x + 18, y + 29, 3, 10, true);
+        fill_portrait_rect(canvas, x + 20, y + 27, 6, 3, true);
+    }
+
+    if (frame == 3) {
+        fill_portrait_rect(canvas, x + 15, y + 32, 4, 8, false);
+        fill_portrait_rect(canvas, x + 17, y + 27, 4, 8, true);
+    }
 }
 
 static void draw_level(lv_obj_t *canvas, uint8_t source, const struct battery_state *state) {
-    const int32_t column_width = PORTRAIT_WIDTH / BATTERY_SOURCE_COUNT;
-    const int32_t column_x = source * column_width;
+    const int32_t y = source == BATTERY_SOURCE_CENTRAL ? 82 : 105;
+
+    draw_letter(canvas, source == BATTERY_SOURCE_CENTRAL ? 'C' : 'P', 1, y, 2);
 
     if (!state->valid) {
-        draw_dash(canvas, column_x + 4, 23);
-        draw_dash(canvas, column_x + 9, 23);
+        draw_dash(canvas, 18, y, 2);
         return;
     }
 
     uint8_t level = MIN(state->level, 100);
     char text[4];
     int length = snprintf(text, sizeof(text), "%u", level);
-    const int32_t glyph_width = 3;
-    const int32_t spacing = 1;
-    const int32_t text_width = length * glyph_width + (length - 1) * spacing;
-    int32_t x = column_x + (column_width - text_width) / 2;
+    int32_t x = PORTRAIT_WIDTH - text_width(length, 2) - 1;
 
     for (int i = 0; i < length; i++) {
-        draw_digit(canvas, text[i] - '0', x, 23, 1);
-        x += glyph_width + spacing;
+        draw_digit(canvas, text[i] - '0', x, y, 2);
+        x += 8;
     }
 }
 
-static void draw_battery_outline(lv_obj_t *canvas, uint8_t source,
-                                 const struct battery_state *state) {
-    const int32_t x = 3 + source * (PORTRAIT_WIDTH / BATTERY_SOURCE_COUNT);
-    const int32_t y = 36;
-    const int32_t width = 10;
-    const int32_t height = 86;
+static void draw_battery_gauge(lv_obj_t *canvas, uint8_t source,
+                               const struct battery_state *state) {
+    const int32_t x = 1;
+    const int32_t y = source == BATTERY_SOURCE_CENTRAL ? 94 : 117;
+    const int32_t width = PORTRAIT_WIDTH - 2;
+    const int32_t height = 6;
 
-    fill_portrait_rect(canvas, x + 3, y - 4, 4, 4, true);
-    fill_portrait_rect(canvas, x, y, width, 2, true);
-    fill_portrait_rect(canvas, x, y + height - 2, width, 2, true);
-    fill_portrait_rect(canvas, x, y, 2, height, true);
-    fill_portrait_rect(canvas, x + width - 2, y, 2, height, true);
+    fill_portrait_rect(canvas, x, y, width, 1, true);
+    fill_portrait_rect(canvas, x, y + height - 1, width, 1, true);
+    fill_portrait_rect(canvas, x, y, 1, height, true);
+    fill_portrait_rect(canvas, x + width - 1, y, 1, height, true);
 
     if (!state->valid) {
         return;
     }
 
-    const int32_t inner_height = height - 6;
-    int32_t fill_height = DIV_ROUND_CLOSEST(inner_height * MIN(state->level, 100), 100);
-    if (fill_height > 0) {
-        fill_portrait_rect(canvas, x + 3, y + height - 3 - fill_height, width - 6, fill_height,
-                           true);
+    const int32_t inner_width = width - 4;
+    int32_t fill_width = DIV_ROUND_CLOSEST(inner_width * MIN(state->level, 100), 100);
+    if (fill_width > 0) {
+        fill_portrait_rect(canvas, x + 2, y + 2, fill_width, height - 4, true);
     }
-}
-
-static void draw_source_marker(lv_obj_t *canvas, uint8_t source) {
-    const int32_t x = 6 + source * (PORTRAIT_WIDTH / BATTERY_SOURCE_COUNT);
-    draw_letter(canvas, source == BATTERY_SOURCE_CENTRAL ? 'C' : 'P', x, 15, 1);
 }
 
 static void redraw(struct battery_widget *widget) {
     lv_canvas_fill_bg(widget->canvas, lv_color_hex(0), LV_OPA_COVER);
 
-    draw_text(widget->canvas, widget->layer_label, 3);
-    fill_portrait_rect(widget->canvas, 1, 11, PORTRAIT_WIDTH - 2, 1, true);
+    draw_text(widget->canvas, widget->layer_label, 2, 2, LAYER_LABEL_MAX_LEN);
+    fill_portrait_rect(widget->canvas, 1, 14, PORTRAIT_WIDTH - 2, 1, true);
+    draw_cat(widget->canvas, widget->cat_frame);
+    fill_portrait_rect(widget->canvas, 1, 76, PORTRAIT_WIDTH - 2, 1, true);
 
     for (uint8_t source = 0; source < BATTERY_SOURCE_COUNT; source++) {
-        draw_source_marker(widget->canvas, source);
         draw_level(widget->canvas, source, &widget->batteries[source]);
-        draw_battery_outline(widget->canvas, source, &widget->batteries[source]);
+        draw_battery_gauge(widget->canvas, source, &widget->batteries[source]);
     }
 
     lv_obj_invalidate(widget->canvas);
+}
+
+static void cat_animation_timer_cb(lv_timer_t *timer) {
+    struct battery_widget *widget = lv_timer_get_user_data(timer);
+
+    widget->cat_frame = (widget->cat_frame + 1) % CAT_FRAME_COUNT;
+    redraw(widget);
 }
 
 static void layer_status_update_cb(struct layer_update update) {
@@ -329,6 +377,7 @@ lv_obj_t *zmk_display_status_screen(void) {
     sys_slist_append(&widgets, &widget.node);
     widget_nice_oled_battery_init();
     widget_nice_oled_layer_init();
+    widget.cat_timer = lv_timer_create(cat_animation_timer_cb, CAT_ANIMATION_PERIOD_MS, &widget);
 
     uint8_t peripheral_level = 0;
     if (zmk_split_central_get_peripheral_battery_level(
