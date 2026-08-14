@@ -177,9 +177,10 @@ CONFIG_ZMK_DISPLAY_STATUS_SCREEN_CUSTOM=y
 
 The `zmk-0.4-polaris` branch includes a lightweight LVGL 9 screen for a
 128x32 SSD1306 mounted vertically. It shows a large active-layer label, a
-low-overhead animated pixel cat, and compact central (`C`) and selected split
-peripheral (`P`) battery gauges. It avoids runtime object transforms by
-rotating pixels directly into the physical framebuffer.
+low-overhead animated pixel cat, the active Bluetooth profile (`BT1`, `BT2`,
+and so on), and compact central (`C`) and selected split peripheral (`P`)
+battery gauges. It avoids runtime object transforms by rotating pixels directly
+into the physical framebuffer.
 
 ```conf
 CONFIG_ZMK_DISPLAY=y

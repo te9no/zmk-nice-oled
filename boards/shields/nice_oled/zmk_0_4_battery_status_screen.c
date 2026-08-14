@@ -14,9 +14,11 @@
 #include <lvgl.h>
 
 #include <zmk/battery.h>
+#include <zmk/ble.h>
 #include <zmk/display.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/battery_state_changed.h>
+#include <zmk/events/ble_active_profile_changed.h>
 #include <zmk/events/layer_state_changed.h>
 #include <zmk/keymap.h>
 #include <zmk/split/central.h>
@@ -50,6 +52,7 @@ struct battery_widget {
     struct battery_state batteries[BATTERY_SOURCE_COUNT];
     char layer_label[LAYER_LABEL_MAX_LEN + 1];
     uint8_t cat_frame;
+    uint8_t bt_profile;
 };
 
 struct battery_update {
@@ -61,6 +64,10 @@ struct battery_update {
 struct layer_update {
     zmk_keymap_layer_index_t index;
     const char *label;
+};
+
+struct profile_update {
+    uint8_t index;
 };
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
@@ -272,6 +279,10 @@ static void redraw(struct battery_widget *widget) {
     draw_text(widget->canvas, widget->layer_label, 2, 2, LAYER_LABEL_MAX_LEN);
     fill_portrait_rect(widget->canvas, 1, 14, PORTRAIT_WIDTH - 2, 1, true);
     draw_cat(widget->canvas, widget->cat_frame);
+
+    char profile_label[6];
+    snprintf(profile_label, sizeof(profile_label), "BT%u", widget->bt_profile + 1);
+    draw_text(widget->canvas, profile_label, 68, 1, sizeof(profile_label) - 1);
     fill_portrait_rect(widget->canvas, 1, 76, PORTRAIT_WIDTH - 2, 1, true);
 
     for (uint8_t source = 0; source < BATTERY_SOURCE_COUNT; source++) {
@@ -308,6 +319,21 @@ static struct layer_update layer_status_get_state(const zmk_event_t *eh) {
         .index = index,
         .label = zmk_keymap_layer_name(zmk_keymap_layer_index_to_id(index)),
     };
+}
+
+static void profile_status_update_cb(struct profile_update update) {
+    struct battery_widget *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        widget->bt_profile = update.index;
+        redraw(widget);
+    }
+}
+
+static struct profile_update profile_status_get_state(const zmk_event_t *eh) {
+    const struct zmk_ble_active_profile_changed *event = as_zmk_ble_active_profile_changed(eh);
+    int index = event != NULL ? event->index : zmk_ble_active_profile_index();
+
+    return (struct profile_update){.index = index < 0 ? 0 : index};
 }
 
 static void battery_status_update_cb(struct battery_update update) {
@@ -359,6 +385,10 @@ ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_layer, struct layer_update,
                             layer_status_update_cb, layer_status_get_state)
 ZMK_SUBSCRIPTION(widget_nice_oled_layer, zmk_layer_state_changed);
 
+ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_profile, struct profile_update,
+                            profile_status_update_cb, profile_status_get_state)
+ZMK_SUBSCRIPTION(widget_nice_oled_profile, zmk_ble_active_profile_changed);
+
 lv_obj_t *zmk_display_status_screen(void) {
     static struct battery_widget widget;
     lv_obj_t *screen = lv_obj_create(NULL);
@@ -377,6 +407,7 @@ lv_obj_t *zmk_display_status_screen(void) {
     sys_slist_append(&widgets, &widget.node);
     widget_nice_oled_battery_init();
     widget_nice_oled_layer_init();
+    widget_nice_oled_profile_init();
     widget.cat_timer = lv_timer_create(cat_animation_timer_cb, CAT_ANIMATION_PERIOD_MS, &widget);
 
     uint8_t peripheral_level = 0;
