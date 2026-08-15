@@ -19,6 +19,7 @@
 #include <zmk/event_manager.h>
 #include <zmk/events/battery_state_changed.h>
 #include <zmk/events/ble_active_profile_changed.h>
+#include <zmk/events/endpoint_changed.h>
 #include <zmk/events/layer_state_changed.h>
 #include <zmk/keymap.h>
 #include <zmk/split/central.h>
@@ -53,6 +54,8 @@ struct battery_widget {
     char layer_label[LAYER_LABEL_MAX_LEN + 1];
     uint8_t cat_frame;
     uint8_t bt_profile;
+    bool bt_connected;
+    bool bt_bonded;
 };
 
 struct battery_update {
@@ -68,6 +71,8 @@ struct layer_update {
 
 struct profile_update {
     uint8_t index;
+    bool connected;
+    bool bonded;
 };
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
@@ -187,6 +192,40 @@ static void draw_dash(lv_obj_t *canvas, int32_t x, int32_t y, uint8_t scale) {
     fill_portrait_rect(canvas, x, y + 2 * scale, 3 * scale, scale, true);
 }
 
+static void draw_bluetooth_icon(lv_obj_t *canvas, int32_t x, int32_t y) {
+    static const uint8_t rows[7] = {
+        0x4, 0x5, 0x6, 0x4, 0x6, 0x5, 0x4,
+    };
+
+    for (uint8_t row = 0; row < ARRAY_SIZE(rows); row++) {
+        for (uint8_t col = 0; col < 3; col++) {
+            if ((rows[row] & BIT(2 - col)) != 0) {
+                set_portrait_pixel(canvas, x + col, y + row, true);
+            }
+        }
+    }
+}
+
+static void draw_connection_status(lv_obj_t *canvas, int32_t x, int32_t y, bool connected,
+                                   bool bonded) {
+    if (connected) {
+        set_portrait_pixel(canvas, x, y + 3, true);
+        set_portrait_pixel(canvas, x + 1, y + 4, true);
+        set_portrait_pixel(canvas, x + 2, y + 3, true);
+        set_portrait_pixel(canvas, x + 3, y + 2, true);
+        set_portrait_pixel(canvas, x + 4, y + 1, true);
+    } else if (bonded) {
+        for (uint8_t i = 0; i < 5; i++) {
+            set_portrait_pixel(canvas, x + i, y + i, true);
+            set_portrait_pixel(canvas, x + 4 - i, y + i, true);
+        }
+    } else {
+        set_portrait_pixel(canvas, x, y + 2, true);
+        set_portrait_pixel(canvas, x + 2, y + 2, true);
+        set_portrait_pixel(canvas, x + 4, y + 2, true);
+    }
+}
+
 static void draw_cat(lv_obj_t *canvas, uint8_t frame) {
     const int32_t x = 4;
     const int32_t y = 18;
@@ -280,9 +319,9 @@ static void redraw(struct battery_widget *widget) {
     fill_portrait_rect(widget->canvas, 1, 14, PORTRAIT_WIDTH - 2, 1, true);
     draw_cat(widget->canvas, widget->cat_frame);
 
-    char profile_label[6];
-    snprintf(profile_label, sizeof(profile_label), "BT%u", widget->bt_profile + 1);
-    draw_text(widget->canvas, profile_label, 68, 1, sizeof(profile_label) - 1);
+    draw_bluetooth_icon(widget->canvas, 3, 65);
+    draw_digit(widget->canvas, (widget->bt_profile + 1) % 10, 13, 66, 1);
+    draw_connection_status(widget->canvas, 23, 66, widget->bt_connected, widget->bt_bonded);
     fill_portrait_rect(widget->canvas, 1, 76, PORTRAIT_WIDTH - 2, 1, true);
 
     for (uint8_t source = 0; source < BATTERY_SOURCE_COUNT; source++) {
@@ -325,6 +364,8 @@ static void profile_status_update_cb(struct profile_update update) {
     struct battery_widget *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
         widget->bt_profile = update.index;
+        widget->bt_connected = update.connected;
+        widget->bt_bonded = update.bonded;
         redraw(widget);
     }
 }
@@ -333,7 +374,11 @@ static struct profile_update profile_status_get_state(const zmk_event_t *eh) {
     const struct zmk_ble_active_profile_changed *event = as_zmk_ble_active_profile_changed(eh);
     int index = event != NULL ? event->index : zmk_ble_active_profile_index();
 
-    return (struct profile_update){.index = index < 0 ? 0 : index};
+    return (struct profile_update){
+        .index = index < 0 ? 0 : index,
+        .connected = zmk_ble_active_profile_is_connected(),
+        .bonded = !zmk_ble_active_profile_is_open(),
+    };
 }
 
 static void battery_status_update_cb(struct battery_update update) {
@@ -388,6 +433,7 @@ ZMK_SUBSCRIPTION(widget_nice_oled_layer, zmk_layer_state_changed);
 ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_profile, struct profile_update,
                             profile_status_update_cb, profile_status_get_state)
 ZMK_SUBSCRIPTION(widget_nice_oled_profile, zmk_ble_active_profile_changed);
+ZMK_SUBSCRIPTION(widget_nice_oled_profile, zmk_endpoint_changed);
 
 lv_obj_t *zmk_display_status_screen(void) {
     static struct battery_widget widget;
