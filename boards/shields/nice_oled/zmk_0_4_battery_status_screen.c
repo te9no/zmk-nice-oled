@@ -14,15 +14,17 @@
 #include <lvgl.h>
 
 #include <zmk/battery.h>
-#include <zmk/ble.h>
 #include <zmk/display.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/battery_state_changed.h>
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#include <zmk/ble.h>
 #include <zmk/events/ble_active_profile_changed.h>
 #include <zmk/events/endpoint_changed.h>
 #include <zmk/events/layer_state_changed.h>
 #include <zmk/keymap.h>
 #include <zmk/split/central.h>
+#endif
 
 #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
 #define PHYSICAL_WIDTH DT_PROP(DISPLAY_NODE, width)
@@ -64,6 +66,7 @@ struct battery_update {
     bool valid;
 };
 
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 struct layer_update {
     zmk_keymap_layer_index_t index;
     const char *label;
@@ -74,6 +77,7 @@ struct profile_update {
     bool connected;
     bool bonded;
 };
+#endif
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 LV_DRAW_BUF_DEFINE_STATIC(battery_draw_buf, PHYSICAL_WIDTH, PHYSICAL_HEIGHT, LV_COLOR_FORMAT_I1);
@@ -339,6 +343,7 @@ static void cat_animation_timer_cb(lv_timer_t *timer) {
     redraw(widget);
 }
 
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 static void layer_status_update_cb(struct layer_update update) {
     struct battery_widget *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
@@ -380,6 +385,7 @@ static struct profile_update profile_status_get_state(const zmk_event_t *eh) {
         .bonded = !zmk_ble_active_profile_is_open(),
     };
 }
+#endif
 
 static void battery_status_update_cb(struct battery_update update) {
     if (update.source >= BATTERY_SOURCE_COUNT) {
@@ -397,6 +403,7 @@ static void battery_status_update_cb(struct battery_update update) {
 }
 
 static struct battery_update battery_status_get_state(const zmk_event_t *eh) {
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     const struct zmk_peripheral_battery_state_changed *peripheral_event =
         as_zmk_peripheral_battery_state_changed(eh);
 
@@ -415,7 +422,17 @@ static struct battery_update battery_status_get_state(const zmk_event_t *eh) {
     const struct zmk_battery_state_changed *central_event = as_zmk_battery_state_changed(eh);
     return (struct battery_update){
         .source = BATTERY_SOURCE_CENTRAL,
-        .level = central_event != NULL ? central_event->state_of_charge
+#else
+    const struct zmk_battery_state_changed *local_event = as_zmk_battery_state_changed(eh);
+    return (struct battery_update){
+        .source = BATTERY_SOURCE_PERIPHERAL,
+#endif
+        .level =
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+            central_event != NULL ? central_event->state_of_charge
+#else
+            local_event != NULL ? local_event->state_of_charge
+#endif
                                        : zmk_battery_state_of_charge(),
         .valid = true,
     };
@@ -424,6 +441,7 @@ static struct battery_update battery_status_get_state(const zmk_event_t *eh) {
 ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_battery, struct battery_update,
                             battery_status_update_cb, battery_status_get_state)
 ZMK_SUBSCRIPTION(widget_nice_oled_battery, zmk_battery_state_changed);
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 ZMK_SUBSCRIPTION(widget_nice_oled_battery, zmk_peripheral_battery_state_changed);
 
 ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_layer, struct layer_update,
@@ -434,6 +452,7 @@ ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_profile, struct profile_update,
                             profile_status_update_cb, profile_status_get_state)
 ZMK_SUBSCRIPTION(widget_nice_oled_profile, zmk_ble_active_profile_changed);
 ZMK_SUBSCRIPTION(widget_nice_oled_profile, zmk_endpoint_changed);
+#endif
 
 lv_obj_t *zmk_display_status_screen(void) {
     static struct battery_widget widget;
@@ -452,10 +471,13 @@ lv_obj_t *zmk_display_status_screen(void) {
 
     sys_slist_append(&widgets, &widget.node);
     widget_nice_oled_battery_init();
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     widget_nice_oled_layer_init();
     widget_nice_oled_profile_init();
+#endif
     widget.cat_timer = lv_timer_create(cat_animation_timer_cb, CAT_ANIMATION_PERIOD_MS, &widget);
 
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     uint8_t peripheral_level = 0;
     if (zmk_split_central_get_peripheral_battery_level(
             CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX, &peripheral_level) == 0) {
@@ -465,6 +487,7 @@ lv_obj_t *zmk_display_status_screen(void) {
         };
         redraw(&widget);
     }
+#endif
 
     return screen;
 }
