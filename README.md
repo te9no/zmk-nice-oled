@@ -191,6 +191,15 @@ CONFIG_NICE_OLED_ZMK_0_4_ROTATION_90=y
 CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX=0
 ```
 
+Split peripheral builds can opt into a distinct companion cat instead of
+showing the central cat twice. The companion uses a different pose while
+active, curls up with a small `Z` indicator on idle/sleep, and keeps the local
+peripheral battery gauge visible:
+
+```conf
+CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL=y
+```
+
 Use `CONFIG_NICE_OLED_ZMK_0_4_ROTATION_270=y` instead if the display is mounted
 in the opposite portrait direction. This mode intentionally replaces the
 legacy widget stack with one canvas and a four-frame 600 ms animation to keep

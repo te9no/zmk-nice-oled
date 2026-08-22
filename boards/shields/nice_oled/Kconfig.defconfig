@@ -43,12 +43,14 @@ config NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX
     default 0
 
 config NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL
-    bool "Show an explicit role screen on split peripherals"
+    bool "Show a distinct companion cat on split peripherals"
     depends on NICE_OLED_ZMK_0_4_BATTERY_ONLY
     default n
     help
-      Replace the shared cat status art with a PERI/SIDE identity screen on
-      split peripheral builds. Central builds keep their existing status art.
+      Replace the shared central cat with a companion pose on split peripheral
+      builds. The companion curls up to sleep when ZMK becomes idle or enters
+      sleep, while retaining the local peripheral battery gauge. Central builds
+      keep their existing status art.
 
 config NICE_OLED_CUSTOM_CANVAS_WIDTH
     int "Custom Canvas Width"
