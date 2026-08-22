@@ -316,7 +316,36 @@ static void draw_battery_gauge(lv_obj_t *canvas, uint8_t source,
     }
 }
 
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                                           \
+    IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL)
+static void redraw_peripheral_role(struct battery_widget *widget) {
+    lv_canvas_fill_bg(widget->canvas, lv_color_hex(0), LV_OPA_COVER);
+
+    draw_text(widget->canvas, "PERI", 3, 2, 4);
+    fill_portrait_rect(widget->canvas, 1, 16, PORTRAIT_WIDTH - 2, 1, true);
+
+    /* A large P and SIDE label make the split role recognizable at a glance. */
+    draw_letter(widget->canvas, 'P', 8, 25, 5);
+    draw_text(widget->canvas, "SIDE", 54, 2, 4);
+    fill_portrait_rect(widget->canvas, 1, 68, PORTRAIT_WIDTH - 2, 1, true);
+
+    draw_text(widget->canvas, "BATT", 75, 1, 4);
+    draw_level(widget->canvas, BATTERY_SOURCE_PERIPHERAL,
+               &widget->batteries[BATTERY_SOURCE_PERIPHERAL]);
+    draw_battery_gauge(widget->canvas, BATTERY_SOURCE_PERIPHERAL,
+                       &widget->batteries[BATTERY_SOURCE_PERIPHERAL]);
+
+    lv_obj_invalidate(widget->canvas);
+}
+#endif
+
 static void redraw(struct battery_widget *widget) {
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                                           \
+    IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL)
+    redraw_peripheral_role(widget);
+    return;
+#endif
+
     lv_canvas_fill_bg(widget->canvas, lv_color_hex(0), LV_OPA_COVER);
 
     draw_text(widget->canvas, widget->layer_label, 2, 2, LAYER_LABEL_MAX_LEN);
