@@ -191,9 +191,9 @@ CONFIG_NICE_OLED_ZMK_0_4_ROTATION_90=y
 CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX=0
 ```
 
-Split peripheral builds can opt into a distinct companion cat instead of
-showing the central cat twice. The companion uses a different pose while
-active, curls up with a small `Z` indicator on idle/sleep, and keeps the local
+Split peripheral builds can opt into the module's original Bongo Cat instead
+of showing the central cat twice. Bongo Cat alternates tapping frames while
+active, stops with small `Z` indicators on idle/sleep, and keeps the local
 peripheral battery gauge visible:
 
 ```conf

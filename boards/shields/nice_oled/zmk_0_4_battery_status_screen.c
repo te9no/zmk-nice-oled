@@ -19,6 +19,10 @@
 #include <zmk/event_manager.h>
 #include <zmk/events/activity_state_changed.h>
 #include <zmk/events/battery_state_changed.h>
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                                           \
+    IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL)
+#include "assets/bongo_cat_portrait.h"
+#endif
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 #include <zmk/ble.h>
 #include <zmk/events/ble_active_profile_changed.h>
@@ -321,76 +325,30 @@ static void draw_battery_gauge(lv_obj_t *canvas, uint8_t source,
 
 #if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                                           \
     IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL)
-static void draw_peripheral_cat(lv_obj_t *canvas, uint8_t frame) {
-    const int32_t x = 3;
-    const int32_t y = 18;
+static void draw_bongo_cat_frame(lv_obj_t *canvas, const uint8_t *pixels, int32_t y) {
+    const int32_t x = (PORTRAIT_WIDTH - BONGO_CAT_PORTRAIT_WIDTH) / 2;
 
-    /* A companion pose: compact body, left-hand tail, and a waving right paw. */
-    fill_portrait_rect(canvas, x + 5, y + 2, 4, 7, true);
-    fill_portrait_rect(canvas, x + 18, y + 2, 4, 7, true);
-    fill_portrait_rect(canvas, x + 4, y + 7, 19, 18, true);
-    fill_portrait_rect(canvas, x + 7, y + 24, 14, 37, true);
-
-    if (frame == 2) {
-        fill_portrait_rect(canvas, x + 8, y + 14, 3, 1, false);
-        fill_portrait_rect(canvas, x + 16, y + 14, 3, 1, false);
-    } else {
-        fill_portrait_rect(canvas, x + 9, y + 13, 2, 2, false);
-        fill_portrait_rect(canvas, x + 16, y + 13, 2, 2, false);
+    for (uint8_t row = 0; row < BONGO_CAT_PORTRAIT_HEIGHT; row++) {
+        for (uint8_t col = 0; col < BONGO_CAT_PORTRAIT_WIDTH; col++) {
+            const uint8_t byte = pixels[row * BONGO_CAT_PORTRAIT_STRIDE + col / 8];
+            if ((byte & BIT(7 - (col % 8))) != 0) {
+                set_portrait_pixel(canvas, x + col, y + row, true);
+            }
+        }
     }
-    set_portrait_pixel(canvas, x + 13, y + 17, false);
-    fill_portrait_rect(canvas, x + 11, y + 20, 5, 1, false);
-
-    /* The tail curls on the opposite side from the central cat. */
-    fill_portrait_rect(canvas, x + 2, y + 34, 3, 21, true);
-    fill_portrait_rect(canvas, x, y + 51, 6, 3, true);
-    fill_portrait_rect(canvas, x, y + 47, 3, 6, true);
-
-    /* Raise and lower the outside paw without moving the body silhouette. */
-    if ((frame & 1) == 0) {
-        fill_portrait_rect(canvas, x + 20, y + 27, 5, 4, true);
-        fill_portrait_rect(canvas, x + 23, y + 21, 3, 9, true);
-    } else {
-        fill_portrait_rect(canvas, x + 20, y + 32, 6, 4, true);
-        fill_portrait_rect(canvas, x + 23, y + 28, 3, 7, true);
-    }
-
-    fill_portrait_rect(canvas, x + 8, y + 58, 5, 5, true);
-    fill_portrait_rect(canvas, x + 16, y + 58, 5, 5, true);
-    fill_portrait_rect(canvas, x + 12, y + 43, 4, 14, false);
-}
-
-static void draw_sleeping_peripheral_cat(lv_obj_t *canvas) {
-    const int32_t x = 2;
-    const int32_t y = 33;
-
-    /* A curled-up silhouette that stays static while the keyboard is idle. */
-    fill_portrait_rect(canvas, x + 4, y + 13, 23, 30, true);
-    fill_portrait_rect(canvas, x + 8, y + 7, 15, 18, true);
-    fill_portrait_rect(canvas, x + 8, y + 3, 4, 7, true);
-    fill_portrait_rect(canvas, x + 19, y + 3, 4, 7, true);
-
-    fill_portrait_rect(canvas, x + 11, y + 15, 3, 1, false);
-    fill_portrait_rect(canvas, x + 18, y + 15, 3, 1, false);
-    set_portrait_pixel(canvas, x + 16, y + 18, false);
-
-    /* Belly cut-out and a tail wrapped around the sleeping cat. */
-    fill_portrait_rect(canvas, x + 11, y + 27, 12, 12, false);
-    fill_portrait_rect(canvas, x + 4, y + 38, 23, 4, true);
-    fill_portrait_rect(canvas, x + 3, y + 31, 4, 10, true);
-    fill_portrait_rect(canvas, x + 6, y + 29, 7, 4, true);
-
-    draw_letter(canvas, 'Z', 21, 21, 1);
-    draw_letter(canvas, 'Z', 25, 13, 1);
 }
 
 static void redraw_peripheral_companion(struct battery_widget *widget) {
     lv_canvas_fill_bg(widget->canvas, lv_color_hex(0), LV_OPA_COVER);
 
     if (widget->activity_state == ZMK_ACTIVITY_ACTIVE) {
-        draw_peripheral_cat(widget->canvas, widget->cat_frame);
+        const uint8_t *frame = (widget->cat_frame & 1) == 0 ? bongo_cat_tap1_03_pixels
+                                                            : bongo_cat_tap2_03_pixels;
+        draw_bongo_cat_frame(widget->canvas, frame, 24);
     } else {
-        draw_sleeping_peripheral_cat(widget->canvas);
+        draw_bongo_cat_frame(widget->canvas, bongo_cat_tap1_01_pixels, 24);
+        draw_letter(widget->canvas, 'Z', 24, 13, 1);
+        draw_letter(widget->canvas, 'Z', 20, 20, 1);
     }
 
     fill_portrait_rect(widget->canvas, 1, 100, PORTRAIT_WIDTH - 2, 1, true);
