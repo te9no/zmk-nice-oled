@@ -324,13 +324,21 @@ static void draw_battery_gauge(lv_obj_t *canvas, uint8_t source,
 
 #if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
 static void draw_bongo_cat_frame(lv_obj_t *canvas, const uint8_t *pixels, int32_t y) {
-    const int32_t x = (PORTRAIT_WIDTH - BONGO_CAT_PORTRAIT_WIDTH) / 2;
+    const uint8_t crop_offset =
+        (BONGO_CAT_PORTRAIT_HEIGHT - PORTRAIT_WIDTH) / 2;
 
     for (uint8_t row = 0; row < BONGO_CAT_PORTRAIT_HEIGHT; row++) {
+        if (row < crop_offset || row >= crop_offset + PORTRAIT_WIDTH) {
+            continue;
+        }
+
         for (uint8_t col = 0; col < BONGO_CAT_PORTRAIT_WIDTH; col++) {
             const uint8_t byte = pixels[row * BONGO_CAT_PORTRAIT_STRIDE + col / 8];
             if ((byte & BIT(7 - (col % 8))) != 0) {
-                set_portrait_pixel(canvas, x + col, y + row, true);
+                /* The legacy frames are pre-rotated for a landscape canvas. */
+                const int32_t portrait_x = row - crop_offset;
+                const int32_t portrait_y = y + BONGO_CAT_PORTRAIT_WIDTH - 1 - col;
+                set_portrait_pixel(canvas, portrait_x, portrait_y, true);
             }
         }
     }
