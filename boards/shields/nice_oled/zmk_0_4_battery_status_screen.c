@@ -21,6 +21,11 @@
 #include <zmk/events/battery_state_changed.h>
 #if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
 #include "assets/bongo_cat_portrait.h"
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+#include <zmk/events/keycode_state_changed.h>
+#else
+#include <zmk/events/position_state_changed.h>
+#endif
 #endif
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 #include <zmk/ble.h>
@@ -42,8 +47,7 @@
 #define BATTERY_SOURCE_COUNT 2
 #define BATTERY_SOURCE_IGNORE 0xff
 #define LAYER_LABEL_MAX_LEN 4
-#define CAT_FRAME_COUNT 4
-#define CAT_ANIMATION_PERIOD_MS 600
+#define CAT_TAP_HOLD_MS 500
 
 BUILD_ASSERT(PHYSICAL_WIDTH == 128 && PHYSICAL_HEIGHT == 32,
              "The portrait battery screen currently supports 128x32 displays");
@@ -60,6 +64,7 @@ struct battery_widget {
     struct battery_state batteries[BATTERY_SOURCE_COUNT];
     char layer_label[LAYER_LABEL_MAX_LEN + 1];
     uint8_t cat_frame;
+    bool cat_tapping;
     uint8_t bt_profile;
     bool bt_connected;
     bool bt_bonded;
@@ -347,14 +352,16 @@ static void draw_bongo_cat_frame(lv_obj_t *canvas, const uint8_t *pixels, int32_
 static void redraw_peripheral_companion(struct battery_widget *widget) {
     lv_canvas_fill_bg(widget->canvas, lv_color_hex(0), LV_OPA_COVER);
 
-    if (widget->activity_state == ZMK_ACTIVITY_ACTIVE) {
+    if (widget->activity_state == ZMK_ACTIVITY_ACTIVE && widget->cat_tapping) {
         const uint8_t *frame = (widget->cat_frame & 1) == 0 ? bongo_cat_tap1_03_pixels
                                                             : bongo_cat_tap2_03_pixels;
         draw_bongo_cat_frame(widget->canvas, frame, 24);
     } else {
         draw_bongo_cat_frame(widget->canvas, bongo_cat_tap1_01_pixels, 24);
-        draw_letter(widget->canvas, 'Z', 24, 13, 1);
-        draw_letter(widget->canvas, 'Z', 20, 20, 1);
+        if (widget->activity_state != ZMK_ACTIVITY_ACTIVE) {
+            draw_letter(widget->canvas, 'Z', 24, 13, 1);
+            draw_letter(widget->canvas, 'Z', 20, 20, 1);
+        }
     }
 
     fill_portrait_rect(widget->canvas, 1, 100, PORTRAIT_WIDTH - 2, 1, true);
@@ -379,14 +386,16 @@ static void redraw(struct battery_widget *widget) {
     draw_text(widget->canvas, widget->layer_label, 2, 2, LAYER_LABEL_MAX_LEN);
     fill_portrait_rect(widget->canvas, 1, 14, PORTRAIT_WIDTH - 2, 1, true);
 #if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
-    if (widget->activity_state == ZMK_ACTIVITY_ACTIVE) {
+    if (widget->activity_state == ZMK_ACTIVITY_ACTIVE && widget->cat_tapping) {
         const uint8_t *frame = (widget->cat_frame & 1) == 0 ? bongo_cat_tap1_03_pixels
                                                             : bongo_cat_tap2_03_pixels;
         draw_bongo_cat_frame(widget->canvas, frame, 15);
     } else {
         draw_bongo_cat_frame(widget->canvas, bongo_cat_tap1_01_pixels, 15);
-        draw_letter(widget->canvas, 'Z', 27, 20, 1);
-        draw_letter(widget->canvas, 'Z', 24, 27, 1);
+        if (widget->activity_state != ZMK_ACTIVITY_ACTIVE) {
+            draw_letter(widget->canvas, 'Z', 27, 20, 1);
+            draw_letter(widget->canvas, 'Z', 24, 27, 1);
+        }
     }
 #else
     draw_cat(widget->canvas, widget->cat_frame);
@@ -408,21 +417,61 @@ static void redraw(struct battery_widget *widget) {
 static void cat_animation_timer_cb(lv_timer_t *timer) {
     struct battery_widget *widget = lv_timer_get_user_data(timer);
 
-    widget->cat_frame = (widget->cat_frame + 1) % CAT_FRAME_COUNT;
+    widget->cat_tapping = false;
+    lv_timer_pause(timer);
     redraw(widget);
 }
 
 #if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
+struct cat_input_update {
+    bool pressed;
+};
+
+static void cat_input_update_cb(struct cat_input_update update) {
+    if (!update.pressed) {
+        return;
+    }
+
+    struct battery_widget *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        if (widget->activity_state != ZMK_ACTIVITY_ACTIVE) {
+            continue;
+        }
+
+        widget->cat_frame ^= 1;
+        widget->cat_tapping = true;
+        if (widget->cat_timer != NULL) {
+            lv_timer_reset(widget->cat_timer);
+            lv_timer_resume(widget->cat_timer);
+        }
+        redraw(widget);
+    }
+}
+
+static struct cat_input_update cat_input_get_state(const zmk_event_t *eh) {
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    const struct zmk_keycode_state_changed *event = as_zmk_keycode_state_changed(eh);
+#else
+    const struct zmk_position_state_changed *event = as_zmk_position_state_changed(eh);
+#endif
+    return (struct cat_input_update){.pressed = event != NULL && event->state};
+}
+
+ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_cat_input, struct cat_input_update,
+                            cat_input_update_cb, cat_input_get_state)
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+ZMK_SUBSCRIPTION(widget_nice_oled_cat_input, zmk_keycode_state_changed);
+#else
+ZMK_SUBSCRIPTION(widget_nice_oled_cat_input, zmk_position_state_changed);
+#endif
+
 static void activity_status_update_cb(struct zmk_activity_state_changed update) {
     struct battery_widget *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
         widget->activity_state = update.state;
-        if (widget->cat_timer != NULL) {
-            if (update.state == ZMK_ACTIVITY_ACTIVE) {
-                lv_timer_resume(widget->cat_timer);
-            } else {
-                lv_timer_pause(widget->cat_timer);
-            }
+        widget->cat_tapping = false;
+        if (widget->cat_timer != NULL && update.state != ZMK_ACTIVITY_ACTIVE) {
+            lv_timer_pause(widget->cat_timer);
         }
         redraw(widget);
     }
@@ -573,12 +622,11 @@ lv_obj_t *zmk_display_status_screen(void) {
     widget_nice_oled_layer_init();
     widget_nice_oled_profile_init();
 #endif
-    widget.cat_timer = lv_timer_create(cat_animation_timer_cb, CAT_ANIMATION_PERIOD_MS, &widget);
+    widget.cat_timer = lv_timer_create(cat_animation_timer_cb, CAT_TAP_HOLD_MS, &widget);
 #if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
+    lv_timer_pause(widget.cat_timer);
+    widget_nice_oled_cat_input_init();
     widget_nice_oled_activity_init();
-    if (widget.activity_state != ZMK_ACTIVITY_ACTIVE) {
-        lv_timer_pause(widget.cat_timer);
-    }
 #endif
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)

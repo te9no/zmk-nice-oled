@@ -193,13 +193,15 @@ CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT=y
 ```
 
 `CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT=y` enables the module's original Bongo Cat
-on the central portrait screen. Bongo Cat alternates tapping frames while
-active and stops with small `Z` indicators on idle/sleep. The legacy landscape
-frames are rotated back and center-cropped without scaling so the face and both
-front paws remain crisp on the 32-pixel-wide portrait display.
+on the central portrait screen. Each key press alternates the tapping paw, and
+the cat returns to a still frame after 500 ms without input. Small `Z`
+indicators are reserved for ZMK idle/sleep. The legacy landscape frames are
+rotated back and center-cropped without scaling so the face and both front paws
+remain crisp on the 32-pixel-wide portrait display.
 
 Split peripheral builds can use the same Bongo Cat while retaining their
-distinct local-battery-only layout:
+distinct local-battery-only layout. The peripheral animation reacts to its
+local physical key input:
 
 ```conf
 CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL=y
