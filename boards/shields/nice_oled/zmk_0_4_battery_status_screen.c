@@ -19,8 +19,7 @@
 #include <zmk/event_manager.h>
 #include <zmk/events/activity_state_changed.h>
 #include <zmk/events/battery_state_changed.h>
-#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                                           \
-    IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL)
+#if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
 #include "assets/bongo_cat_portrait.h"
 #endif
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
@@ -323,8 +322,7 @@ static void draw_battery_gauge(lv_obj_t *canvas, uint8_t source,
     }
 }
 
-#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                                           \
-    IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL)
+#if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
 static void draw_bongo_cat_frame(lv_obj_t *canvas, const uint8_t *pixels, int32_t y) {
     const int32_t x = (PORTRAIT_WIDTH - BONGO_CAT_PORTRAIT_WIDTH) / 2;
 
@@ -372,7 +370,19 @@ static void redraw(struct battery_widget *widget) {
 
     draw_text(widget->canvas, widget->layer_label, 2, 2, LAYER_LABEL_MAX_LEN);
     fill_portrait_rect(widget->canvas, 1, 14, PORTRAIT_WIDTH - 2, 1, true);
+#if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
+    if (widget->activity_state == ZMK_ACTIVITY_ACTIVE) {
+        const uint8_t *frame = (widget->cat_frame & 1) == 0 ? bongo_cat_tap1_03_pixels
+                                                            : bongo_cat_tap2_03_pixels;
+        draw_bongo_cat_frame(widget->canvas, frame, 15);
+    } else {
+        draw_bongo_cat_frame(widget->canvas, bongo_cat_tap1_01_pixels, 15);
+        draw_letter(widget->canvas, 'Z', 27, 20, 1);
+        draw_letter(widget->canvas, 'Z', 24, 27, 1);
+    }
+#else
     draw_cat(widget->canvas, widget->cat_frame);
+#endif
 
     draw_bluetooth_icon(widget->canvas, 3, 65);
     draw_digit(widget->canvas, (widget->bt_profile + 1) % 10, 13, 66, 1);
@@ -394,8 +404,7 @@ static void cat_animation_timer_cb(lv_timer_t *timer) {
     redraw(widget);
 }
 
-#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                                           \
-    IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL)
+#if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
 static void activity_status_update_cb(struct zmk_activity_state_changed update) {
     struct battery_widget *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
@@ -557,8 +566,7 @@ lv_obj_t *zmk_display_status_screen(void) {
     widget_nice_oled_profile_init();
 #endif
     widget.cat_timer = lv_timer_create(cat_animation_timer_cb, CAT_ANIMATION_PERIOD_MS, &widget);
-#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&                                           \
-    IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL)
+#if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
     widget_nice_oled_activity_init();
     if (widget.activity_state != ZMK_ACTIVITY_ACTIVE) {
         lv_timer_pause(widget.cat_timer);

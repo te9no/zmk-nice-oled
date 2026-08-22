@@ -42,9 +42,19 @@ config NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX
     range 0 7
     default 0
 
+config NICE_OLED_ZMK_0_4_BONGO_CAT
+    bool "Show Bongo Cat on the ZMK 0.4 portrait screen"
+    depends on NICE_OLED_ZMK_0_4_BATTERY_ONLY
+    default n
+    help
+      Use the module's original Bongo Cat frames in the lightweight ZMK 0.4
+      portrait screen. The cat stops tapping and shows sleep marks when ZMK
+      becomes idle or enters sleep.
+
 config NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL
     bool "Show Bongo Cat on split peripherals"
     depends on NICE_OLED_ZMK_0_4_BATTERY_ONLY
+    select NICE_OLED_ZMK_0_4_BONGO_CAT
     default n
     help
       Replace the shared central cat with the module's original Bongo Cat art

@@ -189,12 +189,15 @@ CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING=y
 CONFIG_NICE_OLED_ZMK_0_4_BATTERY_ONLY=y
 CONFIG_NICE_OLED_ZMK_0_4_ROTATION_90=y
 CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_INDEX=0
+CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT=y
 ```
 
-Split peripheral builds can opt into the module's original Bongo Cat instead
-of showing the central cat twice. Bongo Cat alternates tapping frames while
-active, stops with small `Z` indicators on idle/sleep, and keeps the local
-peripheral battery gauge visible:
+`CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT=y` enables the module's original Bongo Cat
+on the central portrait screen. Bongo Cat alternates tapping frames while
+active and stops with small `Z` indicators on idle/sleep.
+
+Split peripheral builds can use the same Bongo Cat while retaining their
+distinct local-battery-only layout:
 
 ```conf
 CONFIG_NICE_OLED_ZMK_0_4_PERIPHERAL_ROLE_LABEL=y
