@@ -34,6 +34,9 @@
 #include <zmk/events/layer_state_changed.h>
 #include <zmk/keymap.h>
 #include <zmk/split/central.h>
+#else
+#include <zmk/events/split_peripheral_status_changed.h>
+#include <zmk/split/bluetooth/peripheral.h>
 #endif
 
 #define DISPLAY_NODE DT_CHOSEN(zephyr_display)
@@ -48,6 +51,8 @@
 #define BATTERY_SOURCE_IGNORE 0xff
 #define LAYER_LABEL_MAX_LEN 4
 #define CAT_TAP_HOLD_MS 500
+#define CENTRAL_CAT_Y 20
+#define PERIPHERAL_CAT_Y 8
 
 BUILD_ASSERT(PHYSICAL_WIDTH == 128 && PHYSICAL_HEIGHT == 32,
              "The portrait battery screen currently supports 128x32 displays");
@@ -68,6 +73,7 @@ struct battery_widget {
     uint8_t bt_profile;
     bool bt_connected;
     bool bt_bonded;
+    bool split_connected;
     enum zmk_activity_state activity_state;
 };
 
@@ -87,6 +93,10 @@ struct profile_update {
     uint8_t index;
     bool connected;
     bool bonded;
+};
+#else
+struct peripheral_link_update {
+    bool connected;
 };
 #endif
 
@@ -241,6 +251,15 @@ static void draw_connection_status(lv_obj_t *canvas, int32_t x, int32_t y, bool 
     }
 }
 
+static void draw_paw(lv_obj_t *canvas, int32_t x, int32_t y) {
+    fill_portrait_rect(canvas, x + 1, y + 1, 2, 3, true);
+    fill_portrait_rect(canvas, x + 5, y, 2, 3, true);
+    fill_portrait_rect(canvas, x + 9, y + 1, 2, 3, true);
+    fill_portrait_rect(canvas, x + 3, y + 5, 7, 5, true);
+    set_portrait_pixel(canvas, x + 3, y + 5, false);
+    set_portrait_pixel(canvas, x + 9, y + 5, false);
+}
+
 static void draw_cat(lv_obj_t *canvas, uint8_t frame) {
     const int32_t x = 4;
     const int32_t y = 18;
@@ -355,15 +374,19 @@ static void redraw_peripheral_companion(struct battery_widget *widget) {
     if (widget->activity_state == ZMK_ACTIVITY_ACTIVE && widget->cat_tapping) {
         const uint8_t *frame = (widget->cat_frame & 1) == 0 ? bongo_cat_tap1_03_pixels
                                                             : bongo_cat_tap2_03_pixels;
-        draw_bongo_cat_frame(widget->canvas, frame, 24);
+        draw_bongo_cat_frame(widget->canvas, frame, PERIPHERAL_CAT_Y);
     } else {
-        draw_bongo_cat_frame(widget->canvas, bongo_cat_tap1_01_pixels, 24);
+        draw_bongo_cat_frame(widget->canvas, bongo_cat_tap1_01_pixels, PERIPHERAL_CAT_Y);
         if (widget->activity_state != ZMK_ACTIVITY_ACTIVE) {
-            draw_letter(widget->canvas, 'Z', 24, 13, 1);
-            draw_letter(widget->canvas, 'Z', 20, 20, 1);
+            draw_letter(widget->canvas, 'Z', 27, 13, 1);
+            draw_letter(widget->canvas, 'Z', 24, 20, 1);
         }
     }
 
+    draw_text(widget->canvas, "SPLIT", 42, 1, 5);
+    draw_paw(widget->canvas, 10, 56);
+    draw_text(widget->canvas, "LINK", 77, 1, 4);
+    draw_connection_status(widget->canvas, 14, 87, widget->split_connected, true);
     fill_portrait_rect(widget->canvas, 1, 100, PORTRAIT_WIDTH - 2, 1, true);
     draw_level(widget->canvas, BATTERY_SOURCE_PERIPHERAL,
                &widget->batteries[BATTERY_SOURCE_PERIPHERAL]);
@@ -389,12 +412,12 @@ static void redraw(struct battery_widget *widget) {
     if (widget->activity_state == ZMK_ACTIVITY_ACTIVE && widget->cat_tapping) {
         const uint8_t *frame = (widget->cat_frame & 1) == 0 ? bongo_cat_tap1_03_pixels
                                                             : bongo_cat_tap2_03_pixels;
-        draw_bongo_cat_frame(widget->canvas, frame, 15);
+        draw_bongo_cat_frame(widget->canvas, frame, CENTRAL_CAT_Y);
     } else {
-        draw_bongo_cat_frame(widget->canvas, bongo_cat_tap1_01_pixels, 15);
+        draw_bongo_cat_frame(widget->canvas, bongo_cat_tap1_01_pixels, CENTRAL_CAT_Y);
         if (widget->activity_state != ZMK_ACTIVITY_ACTIVE) {
-            draw_letter(widget->canvas, 'Z', 27, 20, 1);
-            draw_letter(widget->canvas, 'Z', 24, 27, 1);
+            draw_letter(widget->canvas, 'Z', 27, 25, 1);
+            draw_letter(widget->canvas, 'Z', 24, 32, 1);
         }
     }
 #else
@@ -531,6 +554,20 @@ static struct profile_update profile_status_get_state(const zmk_event_t *eh) {
         .bonded = !zmk_ble_active_profile_is_open(),
     };
 }
+#else
+static void peripheral_link_status_update_cb(struct peripheral_link_update update) {
+    struct battery_widget *widget;
+    SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
+        widget->split_connected = update.connected;
+        redraw(widget);
+    }
+}
+
+static struct peripheral_link_update peripheral_link_status_get_state(const zmk_event_t *eh) {
+    return (struct peripheral_link_update){
+        .connected = zmk_split_bt_peripheral_is_connected(),
+    };
+}
 #endif
 
 static void battery_status_update_cb(struct battery_update update) {
@@ -598,6 +635,10 @@ ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_profile, struct profile_update,
                             profile_status_update_cb, profile_status_get_state)
 ZMK_SUBSCRIPTION(widget_nice_oled_profile, zmk_ble_active_profile_changed);
 ZMK_SUBSCRIPTION(widget_nice_oled_profile, zmk_endpoint_changed);
+#else
+ZMK_DISPLAY_WIDGET_LISTENER(widget_nice_oled_peripheral_link, struct peripheral_link_update,
+                            peripheral_link_status_update_cb, peripheral_link_status_get_state)
+ZMK_SUBSCRIPTION(widget_nice_oled_peripheral_link, zmk_split_peripheral_status_changed);
 #endif
 
 lv_obj_t *zmk_display_status_screen(void) {
@@ -621,6 +662,8 @@ lv_obj_t *zmk_display_status_screen(void) {
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     widget_nice_oled_layer_init();
     widget_nice_oled_profile_init();
+#else
+    widget_nice_oled_peripheral_link_init();
 #endif
     widget.cat_timer = lv_timer_create(cat_animation_timer_cb, CAT_TAP_HOLD_MS, &widget);
 #if IS_ENABLED(CONFIG_NICE_OLED_ZMK_0_4_BONGO_CAT)
